@@ -1,4 +1,4 @@
-#Library for hpythhandling DS9 scripting
+#Library for handling DS9 scripting
 
 from numpy import * #Import numpy
 import ds9  #Import wrapper for allowing python script DS9 with XPA
