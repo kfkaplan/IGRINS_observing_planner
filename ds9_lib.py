@@ -1,4 +1,4 @@
-#Library for handling DS9 scripting
+#Library for hpythhandling DS9 scripting
 
 from numpy import * #Import numpy
 import ds9  #Import wrapper for allowing python script DS9 with XPA
@@ -126,7 +126,7 @@ def create_region(coordobj, rotation, plate_scale, guidestar_dra=0, guidestar_dd
     slit_width = str(1.0 * zoom) #Scale slit width
     output.append('box('+str(coordobj.ra.deg())+','+str(coordobj.dec.deg())+','+slit_length+'",'+slit_width+'",' + slit_angle + ') # color=green width=2 select=0')  #Display slit
     if abs(guidestar_dra) > 0. or abs(guidestar_ddec) > 0.:  #show guidestar if it exists
-        output.append('point(' + str(guidestar_dra+coordobj.ra.deg()) + ',' + str(
+        output.append('point(' + str((guidestar_dra/coordobj.dec.cos())+coordobj.ra.deg()) + ',' + str(
             guidestar_ddec+coordobj.dec.deg()) + ') # point=circle font="helvetica 12 bold roman" color=yellow text={Offslit guide star [sl: ' + "%5.2f" % guidestar_sl + ', sw:' + "%5.2f" % guidestar_sw + ']} select=0')
     output.append('polygon' + poly_xy)  #Save SVC FOV polygon
     savetxt('IGRINS_svc_generated.reg', output, fmt="%s")  #Save region template file for reading into ds9
@@ -211,7 +211,6 @@ def make_finder_chart_in_ds9(ra, dec, gstar_dra, gstar_ddec, gstar_sl, gstar_sw,
     #ds9.set(
     #    'regions template IGRINS_svc_generated.tpl at ' + obj_coords.showcoords() + ' fk5')  #Read in regions template file
     #ds9.set('pan to '+obj_coords.showcoords() + ' wcs fk5')
-    print('obj_coords.showcoords() = ', obj_coords.showcoords())
     #ds9.set('regions template ' + current_working_directory + 'IGRINS_svc_generated.tpl at,  ' + obj_coords.showcoords() + ' wcs fk5')
     #ds9.set('regions template ' + current_working_directory + 'IGRINS_svc_generated.tpl')
     ds9.set('regions ' + current_working_directory + 'IGRINS_svc_generated.reg')
