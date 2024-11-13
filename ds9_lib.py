@@ -1,6 +1,6 @@
 #Library for handling DS9 scripting
 
-from numpy import * #Import numpy
+import numpy as np #Import numpy
 import ds9  #Import wrapper for allowing python script DS9 with XPA
 import sys, os
 from coordfuncs import *  #Import coordfuncs for handing spherical astronomy and coordinates
@@ -11,7 +11,7 @@ current_working_directory = os.getcwd() + '/'
 mirror_field = False #Mirror field (needed for DCT)
 observatory_latitude = 30.6714     #Latitude of observatory (deg. north), FOR MCDONALD OBSERVATORY 2.7M
 observatory_longitude = 104.0225    #Longitude of observatory  (deg. west), FOR MCDONALD OBSERVATORY 2.7M
-img_size = 6.0     #Set 2MASS image size to NxN arcmin
+#img_size = 6.0     #Set 2MASS image size to NxN arcmin
 band = 'k'      #Set 2MASS band ('h','j','k')
 plate_scale = 0.119       #Slit View Camera plate-scale, arcsec per pixel, FOR MCDONALD OBSERVATORY 2.7M
 gstar_mag_limit = 14.0        #Guide star search K-band mag. limit, the dimmest K-band mag. to search for guide stars
@@ -132,11 +132,10 @@ def create_region(coordobj, rotation, plate_scale, guidestar_dra=0, guidestar_dd
     savetxt('IGRINS_svc_generated.reg', output, fmt="%s")  #Save region template file for reading into ds9
 
 
-def make_finder_chart_in_ds9(ra, dec, gstar_dra, gstar_ddec, gstar_sl, gstar_sw, PA, grab_image=True):
+def make_finder_chart_in_ds9(ra, dec, gstar_dra, gstar_ddec, gstar_sl, gstar_sw, PA, fov, grab_image=True):
 
     #Set rotator variables
     delta_PA = 90.0 - float(PA)  #Default instrument East-west setting is 90 degrees in PA
-
 
     print(ra+' '+dec)
     obj_coords = coord_query(ra+' '+dec) #Put RA and DEC in a coords object
@@ -147,7 +146,10 @@ def make_finder_chart_in_ds9(ra, dec, gstar_dra, gstar_ddec, gstar_sl, gstar_sw,
         #Use HEASARC Sky View server to get mosaicced 2MASS images, to get rid of bug from where images got sliced from the 2MASS server
         ds9.set('skyview open')
         ds9.set('skyview pixels 900 900') #Set resoultion of image retrieved
-        ds9.set('skyview size '+ str(img_size) + ' ' + str(img_size) + ' arcmin')#Set size of image
+        #n_pixels = str(int(np.round(900 * (fov/6)))) #Calculate number of pixels to use for resolution of 2MASS image, normalized to 900 pixels for 6 arcmin on a side
+        #ds9.set('skyview pixels '+n_pixels+' '+n_pixels) #Set resoultion of image retrieved
+        #ds9.set('skyview size '+ str(img_size) + ' ' + str(img_size) + ' arcmin')#Set size of image
+        ds9.set('skyview size '+ str(fov) + ' ' + str(fov) + ' arcmin')#Set size of image
         ds9.set('skyview survey 2MASS-'+band) #Use HEASARC Sky View server to get mosaicced 2MASS images
         # if obj_choice == '2':  #If user specifies object name
         #    ds9.set('skyview name ' + obj_input.replace(" ", "_"))  #Retrieve 2MASS image

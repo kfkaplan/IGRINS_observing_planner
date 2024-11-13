@@ -4,7 +4,7 @@ import json
 from astroquery.simbad import Simbad
 import ds9_lib
 
-rotator_zero_point = 133.0       #Instrument rotator zero point (Default East-West setting has PA = 90 deg.)
+rotator_zero_point = 193.0       #Instrument rotator zero point (Default East-West setting has PA = 90 deg.)
 
 #Set up window for GUI
 window = tk.Tk()
@@ -30,6 +30,7 @@ class Target:
 		self.dG = (tk.StringVar(value='0.0'), tk.StringVar(value='0.0')) #(sl, sw)
 		self.name = tk.StringVar(value='')
 		self.rotator_setting = tk.StringVar(value='0.0')
+		self.fov = tk.StringVar(value='6.0') #FOV of the finder chart image in arcmin
 		self.update_rotator_setting()
 	def simbad_lookup(self): #Lookup RA and Dec from from simbad
 		result = Simbad.query_object(self.name.get()) #Lookup information from simbad
@@ -79,7 +80,7 @@ guidestar = Target()
 
 
 def make_finder_chart(grab_image=True):
-	ds9_lib.make_finder_chart_in_ds9(target.ra.get(), target.dec.get(), float(guidestar.dra.get()), float(guidestar.ddec.get()), float(guidestar.dG[0].get()), float(guidestar.dG[1].get()), float(target.PA.get()), grab_image=grab_image)
+	ds9_lib.make_finder_chart_in_ds9(target.ra.get(), target.dec.get(), float(guidestar.dra.get()), float(guidestar.ddec.get()), float(guidestar.dG[0].get()), float(guidestar.dG[1].get()), float(target.PA.get()), float(target.fov.get()), grab_image=grab_image)
 
 def remake_regions():
 	make_finder_chart(grab_image=False)
@@ -203,9 +204,16 @@ simbad_name_label.place(relx=0.42, rely=0.02)
 simbad_name_entry.place(relx=0.56, rely=0.02)
 simbad_button.place(relx=0.84, rely=0.015)
 
-#Test make finder chart button
-make_finder_chart_button = tk.Button(frame, text='Test Make Finder Chart', command=make_finder_chart)
-make_finder_chart_button.place(relx=0.6, rely=0.2)
+#make finder chart button
+make_finder_chart_button = tk.Button(frame, text='Make Finder Chart', command=make_finder_chart)
+make_finder_chart_button.place(relx=0.6, rely=0.18)
+fov_label = tk.Label(frame, text='2MASS K Image FOV (arcmin):', font=("Arial", 12), anchor=tk.NE)
+fov_entry = tk.Entry(frame, font=("Arial", 12), textvariable=target.fov)
+fov_label.place(relx=0.53, rely=0.25, relwidth=0.3)
+fov_entry.place(relx=0.83, rely=0.245, relwidth=0.08)
+
+
+
 
 #Search guide star button
 search_guide_star_button = tk.Button(frame, text='Search for Guide Stars', command=search_for_guide_stars)
@@ -217,7 +225,7 @@ search_guide_star_button.place(relx=0.75, rely=0.6)
 #Number of guide stars to grab
 n_guide_stars_label = tk.Label(frame, text='# Stars', font=("Arial", 12), anchor=tk.NE)
 n_guide_stars_entry = tk.Entry(frame, font=("Arial", 12), textvariable=n_guide_stars)
-n_guide_stars_label.place(relx=0.62, rely=0.66, relwidth=0.08)
+n_guide_stars_label.place(relx=0.69, rely=0.66, relwidth=0.08)
 n_guide_stars_entry.place(relx=0.70, rely=0.657, relwidth=0.08)
 
 
