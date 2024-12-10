@@ -82,7 +82,8 @@ def create_region_template(rotation, plate_scale, guidestar_dra=0, guidestar_dde
 '''This function creates the region file for the IGRINS Slit View Camera (SVC) FOV
 Rotation in Position Angle is accounted for via rotation matrix for the 
 polygon used to represent the SVC FOV'''
-def create_region(coordobj, rotation, plate_scale, guidestar_dra=0, guidestar_ddec=0, guidestar_sl=0, guidestar_sw=0, mirror_field=False):
+def create_region(coordobj, rotation, plate_scale, guidestar_dra=0, guidestar_ddec=0, guidestar_sl=0, guidestar_sw=0, mirror_field=False,
+        scan_Nstep=1, scan_dstep=1.0, scan_Nrow=1, scan_Ncol=1, scan_drow=1.0, scan_dcol=1.0):
     zoom =  plate_scale / 0.119 #Set zoom scale to scale the FOV, the McDonald Observatory 2.7m plate scale is 0.119 so changing the plate scale in the options.inp file 
     default_slit_angle = 359.98672  #Default angle of the slit (East to west)
     x, y, poly_x, poly_y = loadtxt('scam-outline.txt', unpack=True) #Outline of SVC FOV, thanks to Henry Roe (private communication)
@@ -132,33 +133,53 @@ def create_region(coordobj, rotation, plate_scale, guidestar_dra=0, guidestar_dd
     savetxt('IGRINS_svc_generated.reg', output, fmt="%s")  #Save region template file for reading into ds9
 
 
-def make_finder_chart_in_ds9(ra, dec, gstar_dra, gstar_ddec, gstar_sl, gstar_sw, PA, fov, grab_image=True):
+
+def make_finder_chart_in_ds9(target, guidestar, grab_image=True):
 
     #Set rotator variables
-    delta_PA = 90.0 - float(PA)  #Default instrument East-west setting is 90 degrees in PA
-
-    print(ra+' '+dec)
-    obj_coords = coord_query(ra+' '+dec) #Put RA and DEC in a coords object
+    delta_PA = 90.0 - float(target.PA.get())  #Default instrument East-west setting is 90 degrees in PA
+    #breakpoint()
+    if target.use_proper_motion.get(): #Use target proper motion to set slit center 
+        ra = sex2deg(target.ra.get(), units='hms') #Convert to decimal degrees so we can easily add and subtract
+        dec = sex2deg(target.dec.get(), units='dms')
+        proper_motion_ra_distance_arcsec = float(target.pmra.get()) * 1e-3 * (float(target.epoch.get())-2000.0)
+        proper_motion_dec_distance_arcsec = float(target.pmdec.get()) * 1e-3 * (float(target.epoch.get())-2000.0)
+        ra += proper_motion_ra_distance_arcsec / cos(radians(dec)) / 3600.0
+        dec += proper_motion_dec_distance_arcsec / 3600.
+        obj_coords = coords(ra, dec)
+        print(ra, dec)
+    else:
+        ra = target.ra.get()
+        dec = target.dec.get()
+        print(ra+' '+dec)
+        obj_coords = coord_query(ra+' '+dec) #Put RA and DEC in a coords object
     #ds9.open()  #Open DS9
     #ds9.wait(2.0) #Used to be needed, commented out for now because I think I fixed this bug and can now speed things up
     if grab_image==True:
         ds9.set('single')  #set single display mode
-        #Use HEASARC Sky View server to get mosaicced 2MASS images, to get rid of bug from where images got sliced from the 2MASS server
-        ds9.set('skyview open')
-        ds9.set('skyview pixels 900 900') #Set resoultion of image retrieved
-        #n_pixels = str(int(np.round(900 * (fov/6)))) #Calculate number of pixels to use for resolution of 2MASS image, normalized to 900 pixels for 6 arcmin on a side
-        #ds9.set('skyview pixels '+n_pixels+' '+n_pixels) #Set resoultion of image retrieved
-        #ds9.set('skyview size '+ str(img_size) + ' ' + str(img_size) + ' arcmin')#Set size of image
-        ds9.set('skyview size '+ str(fov) + ' ' + str(fov) + ' arcmin')#Set size of image
-        ds9.set('skyview survey 2MASS-'+band) #Use HEASARC Sky View server to get mosaicced 2MASS images
-        # if obj_choice == '2':  #If user specifies object name
-        #    ds9.set('skyview name ' + obj_input.replace(" ", "_"))  #Retrieve 2MASS image
-        # else:  #If user specifies object coordiantes
-        #    ds9.set('skyview coord ' + str(obj_coords.ra.deg()) + ' ' + str(
-        #        obj_coords.dec.deg()) + ' degrees')  #Retrieve 2MASS image
-        ds9.set('skyview coord ' + str(obj_coords.ra.deg()) + ' ' + str(
-           obj_coords.dec.deg()) + ' degrees')  #Retrieve 2MASS image
-        ds9.set('skyview close') #Close skyserver window
+        if target.survey.get() == '2MASS K-band': #Use HEASARC Sky View server to get mosaicced 2MASS images, to get rid of bug from where images got sliced from the 2MASS server
+            ds9.set('skyview open')
+            ds9.set('skyview pixels 900 900') #Set resoultion of image retrieved
+            #n_pixels = str(int(np.round(900 * (fov/6)))) #Calculate number of pixels to use for resolution of 2MASS image, normalized to 900 pixels for 6 arcmin on a side
+            #ds9.set('skyview pixels '+n_pixels+' '+n_pixels) #Set resoultion of image retrieved
+            #ds9.set('skyview size '+ str(img_size) + ' ' + str(img_size) + ' arcmin')#Set size of image
+            ds9.set('skyview size '+ target.fov.get() + ' ' + target.fov.get() + ' arcmin')#Set size of image
+            ds9.set('skyview survey 2MASS-'+band) #Use HEASARC Sky View server to get mosaicced 2MASS images
+            # if obj_choice == '2':  #If user specifies object name
+            #    ds9.set('skyview name ' + obj_input.replace(" ", "_"))  #Retrieve 2MASS image
+            # else:  #If user specifies object coordiantes
+            #    ds9.set('skyview coord ' + str(obj_coords.ra.deg()) + ' ' + str(
+            #        obj_coords.dec.deg()) + ' degrees')  #Retrieve 2MASS image
+            ds9.set('skyview coord ' + str(obj_coords.ra.deg()) + ' ' + str(
+               obj_coords.dec.deg()) + ' degrees')  #Retrieve 2MASS image
+            ds9.set('skyview close') #Close skyserver window
+        elif target.survey.get() == 'POSS2 IR': #Use STSCI DSS server to grab the POSS2 Infrared survey
+            ds9.set('dssstsci open')
+            ds9.set('dssstsci size '+ target.fov.get() + ' ' + target.fov.get() + ' arcmin')#Set size of image
+            ds9.set('dssstsci survey poss2ukstu_ir') #Set survey + band
+            ds9.set('dssstsci '+ str(obj_coords.ra.deg()) + ' ' + str(
+               obj_coords.dec.deg()) + ' degrees')  #Retrieve  image
+            #ds9.set('dssstsci close') #Close window when done
         #Old 2MASS server commented out for now, probably obselete, using HEASARC Sky View server now
         #HEASARC Sky Viewer server does not appear to be working anymore in DS9 so falling back on the old 2MASS image server, it's not ideal but it should work (mostly)
         # ds9.set('2mass close')  #Close 2MASS window
@@ -209,7 +230,8 @@ def make_finder_chart_in_ds9(ra, dec, gstar_dra, gstar_ddec, gstar_sl, gstar_sw,
     # create_region(obj_coords, delta_PA, plate_scale, gstar_dra_deg, gstar_ddec_deg, gstar_sl,
     #                        gstar_sw, mirror_field)  #Make region template file rotated and the specified PA
     ds9.set('regions delete all')
-    create_region(obj_coords, delta_PA, plate_scale, guidestar_dra=gstar_dra/3600.0, guidestar_ddec=gstar_ddec/3600.0, guidestar_sl=gstar_sl, guidestar_sw=gstar_sw, mirror_field=mirror_field)  #Make region template file rotated and the specified PA
+    create_region(obj_coords, delta_PA, plate_scale, guidestar_dra=float(guidestar.dra.get())/3600.0, guidestar_ddec=float(guidestar.ddec.get())/3600.0, guidestar_sl=float(guidestar.dG[0].get()), guidestar_sw=float(guidestar.dG[1].get()), mirror_field=mirror_field, 
+        scan_Nstep=int(target.scan_Nstep.get()), scan_dstep=float(target.scan_dstep.get()), scan_Nrow=int(target.scan_Nrow.get()), scan_Ncol=int(target.scan_Ncol.get()), scan_drow=float(target.scan_drow.get()), scan_dcol=float(target.scan_dcol.get()) )  #Make region template file rotated and the specified PA
     #ds9.set(
     #    'regions template IGRINS_svc_generated.tpl at ' + obj_coords.showcoords() + ' fk5')  #Read in regions template file
     #ds9.set('pan to '+obj_coords.showcoords() + ' wcs fk5')
@@ -291,10 +313,18 @@ def make_finder_chart_in_ds9(ra, dec, gstar_dra, gstar_ddec, gstar_sl, gstar_sw,
 
 
 #Search for guide stars
-def search_for_guide_stars(target_ra, target_dec, n_gstars, PA):
+def search_for_guide_stars(target_ra, target_dec, n_gstars, PA, survey, use_proper_motion, epoch):
     obj_coords = coord_query(target_ra+' '+target_dec) #Put RA and DEC in a coords object
     gstar_dec_limit = gstar_dec_limit_arcmin / (2.0 * 60.0)  #Convert limit in Dec. to degrees
     gstar_ra_limit = gstar_ra_limit_arcmin / (2.0 * 60.0 * obj_coords.dec.cos())  #Convert limit in RA to degrees
+    if survey == 'Gaia DR2':
+        ds9.set('catalog gaia')
+        ds9.set(r"catalog filter $_RAJ2000>=" + str(obj_coords.ra.deg() - gstar_ra_limit) + r"&&$_RAJ2000<=" + str(
+            obj_coords.ra.deg() + gstar_ra_limit) \
+                + r"&&$_DEJ2000>=" + str(obj_coords.dec.deg() - gstar_dec_limit) + r"&&$_DEJ2000<=" + str(
+            obj_coords.dec.deg() + gstar_dec_limit) \
+                + r"&&$RPmag<=" + str(gstar_mag_limit+3.0) + r"&&$RPmag>0.01")  #Load catalog
+    #    elif survey == '2MASS point source':
     ds9.set('catalog 2mass')  #Initialize catalog
     # ds9.set("catalog filter '$RAJ2000>=" + str(obj_coords.ra.deg() - gstar_ra_limit) + "&&$RAJ2000<=" + str(
     #     obj_coords.ra.deg() + gstar_ra_limit) \
@@ -306,20 +336,31 @@ def search_for_guide_stars(target_ra, target_dec, n_gstars, PA):
             + r"&&$DEJ2000>=" + str(obj_coords.dec.deg() - gstar_dec_limit) + r"&&$DEJ2000<=" + str(
         obj_coords.dec.deg() + gstar_dec_limit) \
             + r"&&$Kmag<=" + str(gstar_mag_limit))  #Load catalog
-    ds9.set(
-        "catalog sort 'Kmag' incr")  #Sort list by starting from brightest K-band mag. and getting dimmer as you go down
+
+    if survey == 'Gaia DR2':
+        ds9.set('catalog match error 5 arcsec')
+        ds9.set('catalog match')
+    ds9.set("catalog sort '2_Kmag' incr")  #Sort list by starting from brightest K-band mag. and getting dimmer as you go down
     ds9.set("catalog export tsv " + current_working_directory + "tmp.dat")  #Save catalog list as a tab seperated value file for later trimming
     lines = open('tmp.dat').readlines()  #Open catalog list tsv file into memory
+    #breakpoint()
     if len(lines) > 1:
         open('tmp.dat', 'w').writelines(
             lines[0:n_gstars + 1])  #Truncate by maximum number of guide stars and save catalog list
-        ds9.set('catalog clear')  #Clear 2MASS catalog
+        ds9.set('catalog clear')  #Clear 2MASS catalo, note run 3 times to close all the catalog windows
         ds9.set('catalog close')  #Close 2MASS catalog window
-        #ds9.set('catalog import tsv ' + current_working_directory + 'tmp.dat')  #Load only brightest stars to be potential guide stars
-        # ds9.set(
-        #     'mode catalog')  #Set mode to catalog so user can click on possible guide stars and look at their stats
-        gra, gdec, gmag = loadtxt('tmp.dat', usecols=(0, 1, 9), delimiter='\t', unpack=True,
-                                  skiprows=1)  #Grab RA, Dec., and K-mag from catalog
+        if survey == 'Gaia DR2': #If using Gaia
+            ds9.set('catalog clear')  #Clear 2MASS catalog
+            ds9.set('catalog close')  #Close 2MASS catalog window
+            ds9.set('catalog clear')  #Clear 2MASS catalog
+            ds9.set('catalog close')  #Close 2MASS catalog window
+            gra, gdec, gmag, gpra, gpdec = genfromtxt('tmp.dat', usecols=(0, 1, 43, 9, 11), delimiter='\t', unpack=True,
+                                     skip_header=1, missing_values='', filling_values=0)  #Grab RA, Dec., K-mag and proper motion from catalog
+            gpra = ascontiguousarray(gpra)
+            gpdec = ascontiguousarray(gpdec)
+        else: #If just using 2MASS gdec source catalog
+            gra, gdec, gmag = loadtxt('tmp.dat', usecols=(0, 1, 9), delimiter='\t', unpack=True,
+                                     skiprows=1)  #Grab RA, Dec., and K-mag from catalog
         gra = ascontiguousarray(gra) #Fix a bug
         gdec = ascontiguousarray(gdec)
         gmag = ascontiguousarray(gmag)
@@ -333,6 +374,13 @@ def search_for_guide_stars(target_ra, target_dec, n_gstars, PA):
                                                    units='arcsec')  #position of guide star from object in arcseconds
             found_gstar_ddec_arcsec = dec_seperation(obj_coords, gstar_coords,
                                                      units='arcsec')  #position of guide star from object in arcseconds
+            if use_proper_motion == True and survey == 'Gaia DR2': #If using the Gaia catalog and user specifies they want to use proper motion, apply proper motion here
+                proper_motion_ra_distance_arcsec = gpra[i] * 1e-3 * (epoch-2000.0)
+                proper_motion_dec_distance_arcsec = gpdec[i] * 1e-3 * (epoch-2000.0)
+                found_gstar_dra_arcsec += proper_motion_ra_distance_arcsec
+                found_gstar_ddec_arcsec += proper_motion_dec_distance_arcsec
+                gra += proper_motion_ra_distance_arcsec / cos(radians(gdec)) / 3600.0
+                gdec += proper_motion_dec_distance_arcsec / 3600.0
             gstar_dx = (-found_gstar_dra_arcsec * cos(radians(PA - 45.0)) + found_gstar_ddec_arcsec * sin(
                 radians(PA - 45.0)) ) / plate_scale  #guide star position in pixels in the SVC display
             gstar_dy = (found_gstar_dra_arcsec * sin(radians(PA - 45.0)) + found_gstar_ddec_arcsec * cos(
