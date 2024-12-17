@@ -7,7 +7,7 @@ from astroquery.simbad import Simbad
 import ds9_lib
 
 #Add thing to grab from simbad
-Simbad.add_votable_fields('pm')
+Simbad.add_votable_fields('pmra', 'pmdec')
 
 rotator_zero_point = 193.0       #Instrument rotator zero point (Default East-West setting has PA = 90 deg.)
 
