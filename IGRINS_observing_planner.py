@@ -5,6 +5,7 @@ import warnings
 import json
 from astroquery.simbad import Simbad
 import ds9_lib
+from coordfuncs import *
 
 #Add thing to grab from simbad
 Simbad.add_votable_fields('pmra', 'pmdec')
@@ -81,10 +82,16 @@ class Target:
 		self.scan_dcol= tk.StringVar(value='15.0')	
 	def simbad_lookup(self): #Lookup RA and Dec from from simbad
 		result = Simbad.query_object(self.name.get()) #Lookup information from simbad
-		self.ra.set(str(result["RA"].value.data[0]))
-		self.dec.set(str(result["DEC"].value.data[0]))
-		self.proper_motion[0].set(str(result['PMRA'].value.data[0]))
-		self.proper_motion[1].set(str(result['PMDEC'].value.data[0]))
+		# breakpoint()
+		#coords = name_query(self.name.get())
+		#self.ra.set(str(result["ra"].value.data[0]))
+		#self.dec.set(str(result["dec"].value.data[0]))
+		coord_obj = coords(result['ra'].item(), result['dec'].item())		
+		ra, dec = coord_obj.showcoords().split()
+		self.ra.set(ra)
+		self.dec.set(dec)
+		self.proper_motion[0].set(str(result['pmra'].value.data[0]))
+		self.proper_motion[1].set(str(result['pmdec'].value.data[0]))
 	def update_rotator_setting(self, a=0, b=0, c=0): #When PA changes, update rotator setting (note: tkinter trace_add is weird and passes three variables a,b,c for some reason, just ignore them)
 		delta_PA = 90.0 - float(self.PA.get())  #Default instrument East-west setting is 90 degrees in PA
 		rotator_setting = rotator_zero_point - delta_PA  #Calculate setting to put the rotator at for a given PA
@@ -202,6 +209,8 @@ def search_for_guide_stars():
 
 def grab_guide_star():
 	result = ds9_lib.grab_guide_star() #Use xpaget to grab information about the selected region
+	if type(result) is bytes: #Catch in case result is a byte string
+		result = result.decode()
 	result = result.split('(')[1].split(')')[0] #Do some string shenanigans to get the RA and Dec in the right format
 	ra, dec = result.split(',')
 	guidestars[gs_index].ra.set(ra)
