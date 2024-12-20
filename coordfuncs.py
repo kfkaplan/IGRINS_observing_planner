@@ -22,8 +22,8 @@ def name_query(target_name):
     # target_name is a variable containing a source name, such as M31, Alpha Centauri, Sag A*, etc
     if astroquery_import:
         data = Simbad.query_object(target_name)
-        ra = data['RA'].item()
-        dec = data['DEC'].item()
+        ra = data['ra'].item()
+        dec = data['dec'].item()
         return coords(ra, dec)
 
     else:
