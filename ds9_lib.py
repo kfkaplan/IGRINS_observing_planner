@@ -83,7 +83,7 @@ def create_region_template(rotation, plate_scale, guidestar_dra=0, guidestar_dde
 Rotation in Position Angle is accounted for via rotation matrix for the 
 polygon used to represent the SVC FOV'''
 def create_region(coordobj, rotation, plate_scale, guidestar_dra=0, guidestar_ddec=0, guidestar_sl=0, guidestar_sw=0, mirror_field=False,
-        scan_Nstep=1, scan_dstep=1.0, scan_Nrow=1, scan_Ncol=1, scan_drow=1.0, scan_dcol=1.0):
+        show_scan=False, scan_blocks=None, scan_plus_90_deg=False):
     zoom =  plate_scale / 0.119 #Set zoom scale to scale the FOV, the McDonald Observatory 2.7m plate scale is 0.119 so changing the plate scale in the options.inp file 
     default_slit_angle = 359.98672  #Default angle of the slit (East to west)
     x, y, poly_x, poly_y = loadtxt('scam-outline.txt', unpack=True) #Outline of SVC FOV, thanks to Henry Roe (private communication)
@@ -120,12 +120,32 @@ def create_region(coordobj, rotation, plate_scale, guidestar_dra=0, guidestar_dd
         'global color=green dashlist=8 3 width=1 font="helvetica 10 normal roman" select=1 highlite=1 dash=0 fixed=0 edit=1 select=0 delete=1 include=1 source=1')  #Set up color, fonts, and stuff
     output.append('wcs0;fk5')  #Set coordinate system
     #compass_size = str(72.0 * zoom) #Scale compass size
+
+    slit_length = str(15.0 * zoom) #Scale slit length
+    slit_width = str(1.0 * zoom) #Scale slit width
+    #Test plotting slitscan
+    if show_scan:
+        for block in scan_blocks:
+            for i in range(len(block['sw'])):
+                if not scan_plus_90_deg:
+                    block_dra, block_ddec = convert_from_sl_sw_to_dra_ddec(block['sl']-guidestar_sl, block['sw'][i]-guidestar_sw, 90-rotation)
+                    #output.append('box('+str(coordobj.ra.deg()-((block_dra/3600.0)/coordobj.dec.cos()))+','+str(coordobj.dec.deg()-(block_ddec/3600.0))+','+slit_length+'",'+slit_width+'",' + slit_angle + ') # color=#C0C0C0 width=1 select=0')  #Display slit
+                else:
+                    block_dra, block_ddec = convert_from_sl_sw_to_dra_ddec(block['sl']-guidestar_sl, block['sw'][i]-guidestar_sw, (270-rotation))
+                output.append('box('+str(coordobj.ra.deg()-((block_dra/3600.0)/coordobj.dec.cos()))+','+str(coordobj.dec.deg()-(block_ddec/3600.0))+','+slit_length+'",'+slit_width+'",' + slit_angle + ') # color=#C0C0C0 width=1 select=0')  #Display slit
+
+                #block_dra, block_ddec = convert_from_sl_sw_to_dra_ddec(block['sl'], block['sw'][i], 90-rotation)
+
+                
+
+
+
     compass_size = str(36.0 * zoom) #Scale compass size
     output.append(
         '# compass('+str(coordobj.ra.deg())+','+str(coordobj.dec.deg())+','+compass_size+'") compass=fk5 {N} {E} 1 1 font="helvetica 12 bold roman" color=blue fixed=0 select=0')  #Set compass (North and East arrows)
-    slit_length = str(15.0 * zoom) #Scale slit length
-    slit_width = str(1.0 * zoom) #Scale slit width
+
     output.append('box('+str(coordobj.ra.deg())+','+str(coordobj.dec.deg())+','+slit_length+'",'+slit_width+'",' + slit_angle + ') # color=green width=2 select=0')  #Display slit
+    
     if abs(guidestar_dra) > 0. or abs(guidestar_ddec) > 0.:  #show guidestar if it exists
         output.append('point(' + str((guidestar_dra/coordobj.dec.cos())+coordobj.ra.deg()) + ',' + str(
             guidestar_ddec+coordobj.dec.deg()) + ') # point=circle font="helvetica 12 bold roman" color=yellow text={Offslit guide star [sl: ' + "%5.2f" % guidestar_sl + ', sw:' + "%5.2f" % guidestar_sw + ']} select=0')
@@ -139,20 +159,40 @@ def make_finder_chart_in_ds9(target, guidestar, grab_image=True):
     #Set rotator variables
     delta_PA = 90.0 - float(target.PA.get())  #Default instrument East-west setting is 90 degrees in PA
     #breakpoint()
+    ra = sex2deg(target.ra.get(), units='hms') #Convert to decimal degrees so we can easily add and subtract
+    dec = sex2deg(target.dec.get(), units='dms')
     if target.use_proper_motion.get(): #Use target proper motion to set slit center 
-        ra = sex2deg(target.ra.get(), units='hms') #Convert to decimal degrees so we can easily add and subtract
-        dec = sex2deg(target.dec.get(), units='dms')
         proper_motion_ra_distance_arcsec = float(target.pmra.get()) * 1e-3 * (float(target.epoch.get())-2000.0)
         proper_motion_dec_distance_arcsec = float(target.pmdec.get()) * 1e-3 * (float(target.epoch.get())-2000.0)
         ra += proper_motion_ra_distance_arcsec / cos(radians(dec)) / 3600.0
         dec += proper_motion_dec_distance_arcsec / 3600.
-        obj_coords = coords(ra, dec)
-        print(ra, dec)
-    else:
-        ra = target.ra.get()
-        dec = target.dec.get()
-        print(ra+' '+dec)
-        obj_coords = coord_query(ra+' '+dec) #Put RA and DEC in a coords object
+    guidestar_dra = float(guidestar.dra.get()) #Defaults for guidestar
+    guidestar_ddec =  float(guidestar.ddec.get())
+    guidestar_sl =  float(guidestar.dG[0].get())
+    guidestar_sw =  float(guidestar.dG[1].get())
+    if target.use_slitscan.get(): #Adjust coordinates if using slitscan
+        guidestar_sl, guidestar_sw = target.get_scan_sl_sw(int(target.scan_finder_row.get()), 
+                                        int(target.scan_finder_col.get()),
+                                        int(target.scan_finder_pos.get()))
+        guidestar_slitscan_dra, guidestar_slitscan_ddec = convert_from_sl_sw_to_dra_ddec(guidestar_sl, guidestar_sw, float(target.PA.get()))
+        if not target.scan_rotation.get()=='+90 deg PA':
+            ra += (guidestar_dra-guidestar_slitscan_dra) / cos(radians(dec)) / 3600.0
+            dec += (guidestar_ddec-guidestar_slitscan_ddec) / 3600.   
+            guidestar_dra =  guidestar_slitscan_dra
+            guidestar_ddec = guidestar_slitscan_ddec 
+        else:
+            ra += (guidestar_dra+guidestar_slitscan_dra) / cos(radians(dec)) / 3600.0
+            dec += (guidestar_ddec+guidestar_slitscan_ddec) / 3600.       
+            guidestar_dra =  -guidestar_slitscan_dra
+            guidestar_ddec = -guidestar_slitscan_ddec       
+
+    obj_coords = coords(ra, dec)
+    print(ra, dec)
+    # else:
+    #     ra = target.ra.get()
+    #     dec = target.dec.get()
+    #     print(ra+' '+dec)
+    #     obj_coords = coord_query(ra+' '+dec) #Put RA and DEC in a coords object
     #ds9.open()  #Open DS9
     #ds9.wait(2.0) #Used to be needed, commented out for now because I think I fixed this bug and can now speed things up
     if grab_image==True:
@@ -230,8 +270,8 @@ def make_finder_chart_in_ds9(target, guidestar, grab_image=True):
     # create_region(obj_coords, delta_PA, plate_scale, gstar_dra_deg, gstar_ddec_deg, gstar_sl,
     #                        gstar_sw, mirror_field)  #Make region template file rotated and the specified PA
     ds9.set('regions delete all')
-    create_region(obj_coords, delta_PA, plate_scale, guidestar_dra=float(guidestar.dra.get())/3600.0, guidestar_ddec=float(guidestar.ddec.get())/3600.0, guidestar_sl=float(guidestar.dG[0].get()), guidestar_sw=float(guidestar.dG[1].get()), mirror_field=mirror_field, 
-        scan_Nstep=int(target.scan_Nstep.get()), scan_dstep=float(target.scan_dstep.get()), scan_Nrow=int(target.scan_Nrow.get()), scan_Ncol=int(target.scan_Ncol.get()), scan_drow=float(target.scan_drow.get()), scan_dcol=float(target.scan_dcol.get()) )  #Make region template file rotated and the specified PA
+    create_region(obj_coords, delta_PA, plate_scale, guidestar_dra=guidestar_dra/3600.0, guidestar_ddec=guidestar_ddec/3600.0, guidestar_sl=guidestar_sl, guidestar_sw=guidestar_sw, mirror_field=mirror_field, 
+        show_scan=target.use_slitscan.get(), scan_blocks=target.scan_blocks, scan_plus_90_deg=target.scan_rotation.get()=='+90 deg PA')  #Make region template file rotated and the specified PA
     #ds9.set(
     #    'regions template IGRINS_svc_generated.tpl at ' + obj_coords.showcoords() + ' fk5')  #Read in regions template file
     #ds9.set('pan to '+obj_coords.showcoords() + ' wcs fk5')
@@ -381,10 +421,10 @@ def search_for_guide_stars(target_ra, target_dec, n_gstars, PA, survey, use_prop
                 found_gstar_ddec_arcsec += proper_motion_dec_distance_arcsec
                 gra += proper_motion_ra_distance_arcsec / cos(radians(gdec)) / 3600.0
                 gdec += proper_motion_dec_distance_arcsec / 3600.0
-            gstar_dx = (-found_gstar_dra_arcsec * cos(radians(PA - 45.0)) + found_gstar_ddec_arcsec * sin(
-                radians(PA - 45.0)) ) / plate_scale  #guide star position in pixels in the SVC display
-            gstar_dy = (found_gstar_dra_arcsec * sin(radians(PA - 45.0)) + found_gstar_ddec_arcsec * cos(
-                radians(PA - 45.0)) ) / plate_scale  #guide star position in pixels in the SVC display
+            # gstar_dx = (-found_gstar_dra_arcsec * cos(radians(PA - 45.0)) + found_gstar_ddec_arcsec * sin(
+            #     radians(PA - 45.0)) ) / plate_scale  #guide star position in pixels in the SVC display
+            # gstar_dy = (found_gstar_dra_arcsec * sin(radians(PA - 45.0)) + found_gstar_ddec_arcsec * cos(
+            #     radians(PA - 45.0)) ) / plate_scale  #guide star position in pixels in the SVC display
             gstar_sl = -found_gstar_dra_arcsec * cos(radians(PA - 90.0)) + found_gstar_ddec_arcsec * sin(
                 radians(PA - 90.0))  #guide star position relative to slit in arcseconds
             gstar_sw = found_gstar_dra_arcsec * sin(radians(PA - 90.0)) + found_gstar_ddec_arcsec * cos(
@@ -405,22 +445,25 @@ def search_for_guide_stars(target_ra, target_dec, n_gstars, PA, survey, use_prop
 
 
 #Convert dRA and dDec provided by user for guide star to dG SL SW based on slit PA
-def convert_guide_star_from_dra_ddec_to_sl_sw(gstar_dra_arcsec, gstar_ddec_arcsec, PA):
-        gstar_dra_deg = gstar_dra_arcsec / 3600.0  #position of guide star from object in degrees
-        gstar_ddec_deg = gstar_ddec_arcsec / 3600.0  #position of guide star from object in degrees
-        gstar_dx = (-gstar_dra_arcsec * cos(radians(PA - 45.0)) + gstar_ddec_arcsec * sin(
-            radians(PA - 45.0)) ) / plate_scale  #guide star position in pixels in the SVC display
-        gstar_dy = (gstar_dra_arcsec * sin(radians(PA - 45.0)) + gstar_ddec_arcsec * cos(
-            radians(PA - 45.0)) ) / plate_scale  #guide star position in pixels in the SVC display
-        gstar_sl = -gstar_dra_arcsec * cos(radians(PA - 90.0)) + gstar_ddec_arcsec * sin(
+def convert_from_dra_ddec_to_sl_sw(dra_arcsec, ddec_arcsec, PA):
+        sl = -dra_arcsec * cos(radians(PA - 90.0)) + ddec_arcsec * sin(
             radians(PA - 90.0))  #guide star position relative to slit in arcseconds
-        gstar_sw = gstar_dra_arcsec * sin(radians(PA - 90.0)) + gstar_ddec_arcsec * cos(
+        sw = dra_arcsec * sin(radians(PA - 90.0)) + ddec_arcsec * cos(
             radians(PA - 90.0))  #guide star position relative to slit in arcseconds
-        return gstar_sl, gstar_sw
+        return sl, sw
 
 
-def convert_guide_star_from_ra_dec_to_dra_ddec(gstar_ra, gstar_ddec, target_ra, target_dec):
-        gstar_coords = coord_query(gstar_ra+' '+gstar_ddec) #Put RA and DEC in a coords object
+def convert_from_sl_sw_to_dra_ddec(sl, sw, PA):
+        dra_arcsec = -sl * cos(radians(-PA + 90.0)) + sw * sin(
+            radians(-PA + 90.0))  #guide star position relative to slit in arcseconds
+        ddec_arcsec = sl * sin(radians(-PA + 90.0)) + sw * cos(
+            radians(-PA + 90.0))  #guide star position relative to slit in arcseconds
+        return dra_arcsec, ddec_arcsec
+
+
+
+def convert_guide_star_from_ra_dec_to_dra_ddec(gstar_ra, gstar_dec, target_ra, target_dec):
+        gstar_coords = coord_query(gstar_ra+' '+gstar_dec) #Put RA and DEC in a coords object
         target_coords = coord_query(target_ra+' '+target_dec) #Put RA and DEC in a coords object
         gstar_dra_arcsec = ra_seperation(target_coords, gstar_coords,
                                          units='arcsec')  #position of guide star from object in arcseconds

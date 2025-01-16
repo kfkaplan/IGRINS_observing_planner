@@ -87,7 +87,7 @@ def sex2deg(input, units='dms'):
     s=0.0 #Set seconds to zero if user does not input seconds
   if float(x) >= 0: #Check if number is positive
     deg = float(x) + (float(m)/60.0) + (float(s)/3600.0) #Convert sexigasimal units to degrees
-    if x == '-00': #Fix bug where dec of -00 gets read in as positive 
+    if x == '-00' or x=='-0' or x=='-': #Fix bug where dec of -00 gets read in as positive 
       deg = -deg
   else: #If number is not positive we want to subtract the minutes and seconds
     deg = float(x) - (float(m)/60.0) - (float(s)/3600.0) #Convert sexigasimal units to degrees

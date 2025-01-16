@@ -1,8 +1,9 @@
 import tkinter as tk
 from tkinter import ttk
-from tkinter.filedialog import asksaveasfile, askopenfilename
+from tkinter.filedialog import asksaveasfile, askopenfilename, askdirectory
 import warnings
 import json
+import numpy as np
 from astroquery.simbad import Simbad
 import ds9_lib
 from coordfuncs import *
@@ -53,6 +54,8 @@ def update_gs_index(a=0, b=0, c=0): #Update gs_index when user sets the guide st
 	frame.update_idletasks()
 
 
+
+
 #Class holds all info needed to observe a target
 class Target:
 	def __init__(self):
@@ -74,12 +77,20 @@ class Target:
 		self.epoch = tk.StringVar(value=2025.0) #Epoch used to find positions from proper motion
 		self.update_rotator_setting()
 		self.use_slitscan = tk.BooleanVar(value=False)
+		self.scan_rotation = tk.StringVar(value='Default PA') #Variable that sets of the slit scan PA rotation and columns are the default or +/- 90 degrees for the perpendicular scan
 		self.scan_Nstep = tk.StringVar(value='15') #Number of steps in a single block (typically 15)
 		self.scan_dstep = tk.StringVar(value='1.0') #Step size between each pointing in a block
+		self.scan_perNod = tk.StringVar(value='3') #Number of steps per nod sequence between offs
 		self.scan_Nrow = tk.StringVar(value='1') #Number of blocks in rows and columns (parallel with and perpendicular to the slit)
 		self.scan_Ncol = tk.StringVar(value='1')
 		self.scan_drow = tk.StringVar(value='15.0') #Step size of blocks in rows and columnns (parallel with and perpendicular to the slit) in arcsec, typically 15 arcsec but can be less for overlap
 		self.scan_dcol= tk.StringVar(value='15.0')	
+		self.scan_blocks = None #Variable to hold list of dictionaries that define slit scan blocks
+		self.scan_finder_row = tk.StringVar(value=0) #Variables for position to put the slit when making a finder chart for a slitscan position
+		self.scan_finder_col = tk.StringVar(value=0)
+		self.scan_finder_pos = tk.StringVar(value=0)
+		self.scan_script_targetshortname = tk.StringVar(value='') #Short name of target for generating observing scripts
+		self.scan_script_off = (tk.StringVar(value='0.0'), tk.StringVar(value='0.0')) #OFF position (dRA, dDec)
 	def simbad_lookup(self): #Lookup RA and Dec from from simbad
 		result = Simbad.query_object(self.name.get()) #Lookup information from simbad
 		# breakpoint()
@@ -115,12 +126,19 @@ class Target:
 			'survey': self.survey.get(),
 			'epoch': self.epoch.get(),
 			'use_slitscan': self.use_slitscan.get(),
+			'scan_rotation': self.scan_rotation.get(),
 			'scan_Nstep': self.scan_Nstep.get(),
 			'scan_dstep': self.scan_dstep.get(),
+			'scan_perNod' : self.scan_perNod.get(),
 			'scan_Nrow': self.scan_Nrow.get(),
 			'scan_Ncol': self.scan_Ncol.get(),
 			'scan_drow': self.scan_drow.get(),
 			'scan_dcol': self.scan_dcol.get(),
+			'scan_finder_row': self.scan_finder_row.get(),
+			'scan_finder_col': self.scan_finder_col.get(),
+			'scan_finder_pos': self.scan_finder_pos.get(),
+			'scan_script_targetshortname': self.scan_script_targetshortname.get(),
+			'scan_script_off': (self.scan_script_off[0].get(), self.scan_script_off[1].get()),
 		}
 		return dictionary
 	def read_dictionary(self, dictionary): #Read dictionary for loading
@@ -175,16 +193,307 @@ class Target:
 			warnings.warn('Warning: Having trouble reading in survey.  JSON file being read in might not be correct, or could be created by an older version of the observing planner')		
 		try:
 			self.use_slitscan.set(dictionary['use_slitscan'])
-			self.scan_Nstep.set(dictionary['scan_N'])
+			self.scan_rotation.set(dictionary['scan_rotation'])
+			self.scan_Nstep.set(dictionary['scan_Nstep'])
 			self.scan_dstep.set(dictionary['scan_dstep'])
+			self.scan_perNod.set(dictionary['scan_perNod'])
 			self.scan_Nrow.set(dictionary['scan_Nrow'])
 			self.scan_Ncol.set(dictionary['scan_Ncol'])
 			self.scan_drow.set(dictionary['scan_drow'])
 			self.scan_dcol.set(dictionary['scan_dcol'])
+			self.scan_finder_row.set(dictionary['scan_finder_row'])
+			self.scan_finder_col.set(dictionary['scan_finder_col'])
+			self.scan_finder_pos.set(dictionary['scan_finder_pos'])
+			self.scan_script_targetshortname.set(dictionary['scan_script_targetshortname'])
+			self.scan_script_off[0].set(dictionary['scan_script_off'][0])
+			self.scan_script_off[1].set(dictionary['scan_script_off'][1])
 		except:
 			warnings.warn('Warning: Having trouble reading in slitscan variables.  JSON file being read in might not be correct, or could be created by an older version of the observing planner')		
+	def generate_slitscan_blocks(self):
+		global guidestars, gs_index
+		dg_sl = float(guidestars[gs_index].dG[0].get())
+		dg_sw = float(guidestars[gs_index].dG[1].get())
+		total_steps = int(self.scan_Nstep.get()) #Number of steps, rows, and cols
+		perNod = int(self.scan_perNod.get()) #Number of steps per nod between offs
+		nrows = int(self.scan_Nrow.get())
+		ncols = int(self.scan_Ncol.get())
+		drow = float(self.scan_drow.get()) #Distance between center of each step, row, col, or  in arcsec
+		dcol = float(self.scan_dcol.get())
+		dstep = float(self.scan_dstep.get())
+		if self.scan_rotation.get() != 'Default PA': #Swap number and distance traveled for rows and columns if in perpeindicular rotation
+			temp_nrows = nrows
+			temp_ncols = ncols
+			temp_drow = drow
+			temp_dcol = dcol
+			nrows = temp_ncols
+			ncols = temp_nrows
+			drow = temp_dcol
+			dcol = temp_drow
+		rows_start = ((nrows-1)/2) * drow #Calculate starting coordinate offsets
+		cols_start = -((ncols-1)/2) * dcol
+		steps_start = -((total_steps-1)/2) * dstep
 
+		rows = []
+		cols = []
+		steps = []
+		steps_centers = []
+		#Generate block rows and columns pattern
+		if nrows >= 2 and ncols >=2: #Need at least 2x2 rows and cols to do the zig zag pattern
+			i=0
+			while i+1 < nrows:
+				j=0
+				while j+1 < ncols:
+					print(i, j)
+					rows.append(i) #Do the zigzag between chunks of 4 rows and columns
+					cols.append(j)
+					rows.append(i+1)
+					cols.append(j+1)
+					rows.append(i+1)
+					cols.append(j)
+					rows.append(i)
+					cols.append(j+1)
+					j=j+2
+				i=i+2
+		if nrows % 2 == 1: #If there are an odd number of rows, fill out the last row by alternating columns, pattern is 1-3-0-2
+			j=0
+			while j < ncols:
+				if ncols - j >= 4: #if 4 or more left
+					cols.append(j+2)
+					cols.append(j+0)
+					cols.append(j+3)
+					cols.append(j+1)
+					rows.append(nrows-1)
+					rows.append(nrows-1)
+					rows.append(nrows-1)
+					rows.append(nrows-1)
+				elif ncols - j == 3: #if 3 left
+					cols.append(j+1)
+					cols.append(j+0)
+					cols.append(j+2)
+					rows.append(nrows-1)
+					rows.append(nrows-1)
+					rows.append(nrows-1)
+				elif ncols - j == 2: #If 2 left
+					cols.append(j+1)
+					cols.append(j+0)
+					rows.append(nrows-1)
+					rows.append(nrows-1)
+				elif ncols - j == 1: #If 1 left
+					cols.append(j+0)
+					rows.append(nrows-1)
+				j = j + 4
+			nrows = nrows-1 #Note the last row is filled out now so no need to repeat it for the last column so we subtract 1 here
+		if ncols % 2 == 1:
+			i=0
+			while i < nrows: #1
+				if nrows - i >= 4:  #if 4 or more left
+					rows.append(i+2)
+					rows.append(i+0)
+					rows.append(i+3)
+					rows.append(i+1)
+					cols.append(ncols-1)
+					cols.append(ncols-1)
+					cols.append(ncols-1)
+					cols.append(ncols-1)
+				elif nrows - i == 3:
+					rows.append(i+1)
+					rows.append(i+0)
+					rows.append(i+2)
+					cols.append(ncols-1)
+					cols.append(ncols-1)
+					cols.append(ncols-1)
+				elif nrows - i == 2:
+					rows.append(i+1)
+					rows.append(i+0)
+					cols.append(ncols-1)
+					cols.append(ncols-1)
+				elif nrows - i == 1:
+					rows.append(i+0)
+					cols.append(ncols-1)
+				i = i+4
+		#Generate step pattern within blocks
+		n_sets = int(total_steps / perNod)
+		for i in range(n_sets):
+			set_of_steps = []
+			for j in range(perNod):
+				set_of_steps.append(i+n_sets*j)
+			for j in range(perNod, 0, -1):
+				set_of_steps.append(i+n_sets*(j-1))
+			steps.append(set_of_steps)
+			steps_centers.append(steps_start + np.array(set_of_steps)*dstep)
+		#Organize into list of offs, blocks, and positions into "chunks" between offs
+		n_blocks = len(rows)
+		blocks = []
+		for i in range(0, n_blocks, 2):
+			for j in range(n_sets):
+				row_center = rows_start - rows[i]*drow
+				col_center = cols_start + cols[i]*dcol
+				sl = dg_sl + row_center
+				sw = dg_sw + col_center + steps_centers[j]
+				block1 = {"row":rows[i], "col":cols[i], "pos":steps[j], "sl":sl, "sw":sw}
+				blocks.append(block1)
+				if n_blocks > 1: #Error catch for when their is only one black
+					row_center = rows_start - rows[i+1]*drow
+					col_center = cols_start + cols[i+1]*dcol
+					sl = dg_sl + row_center
+					sw = dg_sw + col_center + steps_centers[j]
+					block2 = {"row":rows[i+1], "col":cols[i+1],"pos":steps[j], "sl":sl, "sw":sw}
+					blocks.append(block2)
+					if i+2 == n_blocks-1: #Handle an odd number of blocks to nod between by mixing 3 instead of 2 blocks
+						row_center = rows_start - rows[i+2]*drow
+						col_center = cols_start + cols[i+2]*dcol
+						sl = dg_sl + row_center
+						sw = dg_sw + col_center + steps_centers[j]
+						block3 = {"row":rows[i+2], "col":cols[i+2], "pos":steps[j], "sl":sl, "sw":sw}
+						blocks.append(block3)
+			if i+2 == n_blocks-1: #Handle an odd number of blocks to nod between by mixing 3 instead of 2 blocks
+				break #and end the loop
+		if self.scan_rotation.get() == '+90 deg PA': #If perpendicular scan with PA at +90 deg compared to default (e.g. PA 90 is default so this would be PA of 180 deg)
+			print('ITS WORKING ITS WORKING')
+			for block in blocks:
+				block['row'] = nrows - block['row'] - 1
+		# elif self.scan_rotation.get() == '-90 deg PA':
+		# 	for block in blocks:
+		# 		block['row'] = nrows - block['row'] - 1
+		# 		block['row'] = ncols - temp_col -1 #order inverted
+		self.scan_blocks = blocks
+	def generate_slitscan_table(self):
 
+		self.generate_slitscan_blocks()
+
+		#Test creating csv file
+		print('Test making CSV file that can be imported into google sheets')
+		lines = []
+		#Define header line
+		blank_line = ', , , , , , , , , , , , , , , , , , , , , , , , , , , , , , , , , , , , , , , , , '
+		#blank_line = ''
+		header_line = 'PA, Night, Exp. time, Block 1, Block 2,'
+		n_positions = int(len(self.scan_blocks[0]['pos'])/2)
+		for j in range(n_positions):
+			header_line += 'Pos '+str(j+1)+', '
+		header_line += 'OFF, , '
+		for j in range(n_positions):
+			header_line += 'Block 1 Pos '+str(j)+', , '
+		for j in range(n_positions, 0, -1):
+			header_line += 'Block 1 Pos '+str(j)+', , '	
+		header_line += 'OFF, , '	
+		for j in range(n_positions):
+			header_line += 'Block 2 Pos '+str(j+1)+', , '
+		for j in range(n_positions, 0, -1):
+			header_line += 'Block 2 Pos '+str(j)+', , '
+		header_line += 'OFF, , Airmass, UT, Comments'
+		lines.append(header_line)
+		#Define observing plan
+		for i in range(0, len(self.scan_blocks), 2):
+			line = '' #start line to output
+			line += self.PA.get() +', ' #PA
+			line += ', ' #Date of night, leave blank
+			line += ', ' #Exp time., leave blank
+			line += str(self.scan_blocks[i]['row'])+'-'+str(self.scan_blocks[i]['col'])+', ' #Block 1
+			line += str(self.scan_blocks[i+1]['row'])+'-'+str(self.scan_blocks[i+1]['col'])+', ' #Block 2
+			for j in range(n_positions):
+				line += str(self.scan_blocks[i]['pos'][j])+', ' #Position J (usually 1 2 3 for example)
+			line += ', , ' #OFF
+			for j in range(2*n_positions):
+				line += '%0.2f'%self.scan_blocks[i]['sl']+', %0.2f'%self.scan_blocks[i]['sw'][j]+', ' #Block 1 Pos J
+			line += ', , ' #OFF
+			if i+1 < len(self.scan_blocks): #Catch if last "chunk" then just leave blanks
+				for j in range(2*n_positions):
+					line += '%0.2f'%self.scan_blocks[i+1]['sl']+', %0.2f'%self.scan_blocks[i+1]['sw'][j]+', ' #Block 2 Pos J			
+			else:
+				for j in range(2*n_positions):
+					line += ', , '
+			line += ', , ' #OFF	
+			line += ', ' #Airmass, leave blank
+			line += ', ' #UT, leave blank
+			line += ', ' #Comments, leave blank
+			lines.append(line) #Store line in list
+			lines.append(blank_line) #Insert blank line for later data entry
+		# for line in lines:
+		# 	print(line)
+		f = asksaveasfile(initialfile = 'slitscan.csv', #Save table for import into google sheet as an observing log plan
+				defaultextension=".csv",filetypes=[("All Files","*.*"),("CSV Documents","*.csv")])
+		if f is None: #Error catch if no file is found
+			return
+		for line in lines:
+			f.write(f"{line}\n")
+		f.close()
+		# for i in range(rows):
+		# 	for j in range(cols):
+		# 		for k in range(steps):
+		# 			label = '%02i'%i + '_' + '%02i'%j + '_' + '%02i'%k
+		# 			print(label)
+		# 			row_center = rows_start + i*drow
+		# 			col_center = cols_start + j*dcol
+		# 			step_center = steps_start + k*dstep
+		# 			print(row_center, col_center, step_center)
+	def get_scan_sl_sw(self, row=0, col=0, pos=0): #Return guidestar sl and sw for a given row, column, and position in a slitscan
+		blocks_with_match_rows = [element for element in self.scan_blocks if element['row'] == row]
+		blocks_with_matched_row_and_col = [element for element in blocks_with_match_rows if element['col'] == col]
+		for block in blocks_with_matched_row_and_col:
+			sl = block['sl']
+			if block['pos'][0] == pos: #Check all three possible positions
+				sw = block['sw'][0]
+				return sl, sw
+			if block['pos'][1] == pos:
+				sw = block['sw'][1]
+				return sl, sw
+			if block['pos'][2] == pos:
+				sw = block['sw'][2]
+				return sl, sw
+	def generate_slitscan_scripts(self):
+		self.generate_slitscan_blocks()
+		parent_dir = askdirectory()
+		if parent_dir is None: #Error catch if no dir is found
+			return
+		for scan_block in self.scan_blocks:
+			lines = []
+			lines.append('SetObjType TAR')
+			sl = scan_block['sl']
+			sw = scan_block['sw'][0]
+			lines.append('SetAGPos %0.2f'%sl +' %0.2f'%sw)
+			label = self.scan_script_targetshortname.get()+'_'+str(scan_block['row'])+'-'+str(scan_block['col'])+'-'+str(scan_block['pos'][0])
+			lines.append('SetObjName '+label)
+			lines.append('WaitForYes “To start script for '+str(scan_block['row'])+'-'+str(scan_block['col'])+' starting pos '+str(scan_block['pos'][0])+'. Put guide star at autoguide position then click Yes.”')
+			lines.append('StartGuideBox')
+			lines.append('WaitForSeconds 15')
+			lines.append('StartExposure')
+			lines.append('WaitForExposureEnds')
+			lines.append('StopAG')
+			lines.append('WaitForSeconds 3')
+			n_pos = len(scan_block['pos'])
+			previous_sl = sl
+			previous_sw = sw
+			i = 1
+			while i < n_pos:
+				sw = scan_block['sw'][i]
+				dra, ddec = ds9_lib.convert_from_sl_sw_to_dra_ddec(sl-previous_sl, sw-previous_sw, float(self.PA.get()))
+				previous_sl = sl
+				previous_sw = sw
+				lines.append('SetObjName '+self.scan_script_targetshortname.get()+'_'+str(scan_block['row'])+'-'+str(scan_block['col'])+'-'+str(scan_block['pos'][i]))
+				lines.append('SetAGPos %0.2f'%sl +' %0.2f'%sw)
+				lines.append('MoveTelescope %0.2f'%-dra +' %0.2f'%-ddec)
+				lines.append('WaitForSeconds 1')
+				lines.append('StartGuideBox')
+				lines.append('StartExposure')
+				lines.append('WaitForExposureEnds')
+				if i < n_pos-1:
+					if scan_block['pos'][i] == scan_block['pos'][i+1]:
+						lines.append('StartExposure')
+						lines.append('WaitForExposureEnds')	
+						i = i+1
+				lines.append('StopAG')
+				lines.append('WaitForSeconds 3')
+				i = i+1
+			lines.append('SetObjName '+self.scan_script_targetshortname.get()+'_OFF')
+			lines.append('MoveTelescope '+self.scan_script_off[0].get()+' '+self.scan_script_off[1].get())
+			lines.append('WaitForSeconds 1')
+			lines.append('StartExposure')
+			lines.append('WaitForExposureEnds')		
+			f = open(parent_dir+'/'+label+'.script', "w")
+			for line in lines:
+				f.write(f"{line}\n")
+			f.close()
 
 
 target = Target()
@@ -194,7 +503,8 @@ guidestars[gs_index].survey.set('Gaia DR2') #Set guidetar survey default
 
 
 def make_finder_chart(grab_image=True):
- 	ds9_lib.make_finder_chart_in_ds9(target, guidestars[gs_index], grab_image=grab_image)
+	target.generate_slitscan_blocks()
+	ds9_lib.make_finder_chart_in_ds9(target, guidestars[gs_index], grab_image=grab_image)
 
 
 def remake_regions():
@@ -202,7 +512,8 @@ def remake_regions():
 
 def change_PA(a=0, b=0, c=0):
 	target.update_rotator_setting()
-	remake_regions()
+	guideStarConvertDraDdecToSlSw()
+	#remake_regions()
 
 def search_for_guide_stars():
 	ds9_lib.search_for_guide_stars(target.ra.get(), target.dec.get(), int(n_guide_stars.get()), float(target.PA.get()), guidestars[gs_index].survey.get(), guidestars[gs_index].use_proper_motion.get(), float(target.epoch.get()))
@@ -219,7 +530,7 @@ def grab_guide_star():
 	remake_regions() #Remake the regions in the finder chart
 
 def guideStarConvertDraDdecToSlSw():
-	sl, sw = ds9_lib.convert_guide_star_from_dra_ddec_to_sl_sw(float(guidestars[gs_index].dra.get()), float(guidestars[gs_index].ddec.get()), float(target.PA.get()))
+	sl, sw = ds9_lib.convert_from_dra_ddec_to_sl_sw(float(guidestars[gs_index].dra.get()), float(guidestars[gs_index].ddec.get()), float(target.PA.get()))
 	guidestars[gs_index].dG[0].set(str(sl))
 	guidestars[gs_index].dG[1].set(str(sw))
 
@@ -297,8 +608,8 @@ target.PA.trace_add('write', change_PA) #Add a trace_add callback to update the 
 
 epoch_label = tk.Label(frame, text='Epoch:', font=("Arial", 12), anchor=tk.NE)
 epoch_entry = tk.Entry(frame, font=("Arial", 12), textvariable=target.epoch)
-epoch_label.place(relx=0.035, rely=0.26)
-epoch_entry.place(relx=0.12, rely=0.257)
+epoch_label.place(relx=0.035, rely=0.19)
+epoch_entry.place(relx=0.12, rely=0.187)
 
 
 #Proper motion for target
@@ -316,34 +627,74 @@ pm_checkbox.place(relx=0.33, rely=0.10)
 
 
 #Slit scan parameters
-slitscan_checkbox = tk.Checkbutton(frame, text=r"Use slitscan?", variable=target.use_slitscan)
+slitscan_header = tk.Label(frame, text='Slitscan', font=("Arial bold", 24), anchor=tk.N)
+slitscan_checkbox = tk.Checkbutton(frame, text=r"Plot slitscan?", variable=target.use_slitscan)
+slitscan_button = tk.Button(frame, text='Generate Slitscan Table', command=target.generate_slitscan_table)
+
+slitscan_finder_row_label = tk.Label(frame, text="Row", font=("Arial", 12), anchor=tk.NE)
+slitscan_finder_col_label = tk.Label(frame, text="Column", font=("Arial", 12), anchor=tk.NE)
+slitscan_finder_pos_label = tk.Label(frame, text="Position", font=("Arial", 12), anchor=tk.NE)
+slitscan_finder_row_entry = tk.Entry(frame, font=("Arial", 12), textvariable=target.scan_finder_row)
+slitscan_finder_col_entry = tk.Entry(frame, font=("Arial", 12), textvariable=target.scan_finder_col)
+slitscan_finder_pos_entry = tk.Entry(frame, font=("Arial", 12), textvariable=target.scan_finder_pos)
+
+slitscan_rotation_label = tk.Label(frame, text="PA Rotation", font=("Arial", 12), anchor=tk.NE)
+#slitscan_rotation_menu = ttk.Combobox(frame, textvariable=target.scan_rotation, values=('Default PA', '+90 deg PA', '-90 deg PA'), state='readonly')
+slitscan_rotation_menu = ttk.Combobox(frame, textvariable=target.scan_rotation, values=('Default PA', '+90 deg PA'), state='readonly')
 slitscan_N_label = tk.Label(frame, text='N', font=("Arial", 12), anchor=tk.NE)
 slitscan_d_label = tk.Label(frame, text='dist. (arcsec)', font=("Arial", 12), anchor=tk.NE)
+slitscan_perNod_label = tk.Label(frame, text="per nod", font=("Arial", 12), anchor=tk.NE)
 slitscan_block_label = tk.Label(frame, text='Single Block', font=("Arial", 12), anchor=tk.NE)
 slitscan_rows_label = tk.Label(frame, text='Rows', font=("Arial", 12), anchor=tk.NE)
 slitscan_cols_label = tk.Label(frame, text='Columns', font=("Arial", 12), anchor=tk.NE)
 slitscan_N_entry = tk.Entry(frame, font=("Arial", 12), textvariable=target.scan_Nstep)
 slitscan_d_entry = tk.Entry(frame, font=("Arial", 12), textvariable=target.scan_dstep)
+slitscan_perNod_entry = tk.Entry(frame, font=("Arial", 12), textvariable=target.scan_perNod)
 slitscan_Nrow_entry = tk.Entry(frame, font=("Arial", 12), textvariable=target.scan_Nrow)
 slitscan_drow_entry = tk.Entry(frame, font=("Arial", 12), textvariable=target.scan_drow)
 slitscan_Ncol_entry = tk.Entry(frame, font=("Arial", 12), textvariable=target.scan_Ncol)
 slitscan_dcol_entry = tk.Entry(frame, font=("Arial", 12), textvariable=target.scan_dcol)
+slitscan_header.place(relx=0.0, rely=0.25, relwidth=1.0)
+slitscan_button.place(relx=0.1, rely=0.47, relwidth=0.2)
+slitscan_checkbox.place(relx=0.83, rely=0.30, relwidth=0.15)
+slitscan_finder_row_label.place(relx=0.81, rely=0.33, relwidth=0.08)
+slitscan_finder_col_label.place(relx=0.81, rely=0.36, relwidth=0.08)
+slitscan_finder_pos_label.place(relx=0.81, rely=0.39, relwidth=0.08)
+slitscan_finder_row_entry.place(relx=0.89, rely=0.33, relwidth=0.05)
+slitscan_finder_col_entry.place(relx=0.89, rely=0.36, relwidth=0.05)
+slitscan_finder_pos_entry.place(relx=0.89, rely=0.39, relwidth=0.05)
 
-slitscan_checkbox.place(relx=0.7, rely=0.4, relwidth=0.15)
-slitscan_N_label.place(relx=0.645, rely=0.435, relwidth=0.1)
-slitscan_d_label.place(relx=0.765, rely=0.435, relwidth=0.1)
-slitscan_block_label.place(relx=0.6, rely=0.4633, relwidth=0.1)
-slitscan_rows_label.place(relx=0.6, rely=0.4933, relwidth=0.1)
-slitscan_cols_label.place(relx=0.6, rely=0.5233, relwidth=0.1)
-slitscan_N_entry.place(relx=0.7, rely=0.46, relwidth=0.08)
-slitscan_d_entry.place(relx=0.78, rely=0.46, relwidth=0.08)
-slitscan_Nrow_entry.place(relx=0.7, rely=0.49, relwidth=0.08)
-slitscan_drow_entry.place(relx=0.78, rely=0.49, relwidth=0.08)
-slitscan_Ncol_entry.place(relx=0.7, rely=0.52, relwidth=0.08)
-slitscan_dcol_entry.place(relx=0.78, rely=0.52, relwidth=0.08)
+slitscan_rotation_label.place(relx=0.055, rely=0.305, relwidth=0.1)
+slitscan_rotation_menu.place(relx=0.167, rely=0.302, relwidth=0.14)
+slitscan_N_label.place(relx=0.065, rely=0.335, relwidth=0.08)
+slitscan_d_label.place(relx=0.165, rely=0.335, relwidth=0.10)
+slitscan_perNod_label.place(relx=0.27, rely=0.335, relwidth=0.06)
+slitscan_block_label.place(relx=0.0, rely=0.3633, relwidth=0.1)
+slitscan_rows_label.place(relx=0.0, rely=0.3933, relwidth=0.1)
+slitscan_cols_label.place(relx=0.0, rely=0.4233, relwidth=0.1)
+slitscan_N_entry.place(relx=0.1, rely=0.36, relwidth=0.08)
+slitscan_d_entry.place(relx=0.18, rely=0.36, relwidth=0.08)
+slitscan_perNod_entry.place(relx=0.26, rely=0.36, relwidth=0.08)
+slitscan_Nrow_entry.place(relx=0.1, rely=0.39, relwidth=0.08)
+slitscan_drow_entry.place(relx=0.18, rely=0.39, relwidth=0.08)
+slitscan_Ncol_entry.place(relx=0.1, rely=0.42, relwidth=0.08)
+slitscan_dcol_entry.place(relx=0.18, rely=0.42, relwidth=0.08)
 
 
-
+slitscan_script_targetshortname_label = tk.Label(frame, text="Target Shortname", font=("Arial", 12), anchor=tk.NE)
+slitscan_script_off_dra_label = tk.Label(frame, text="OFF dRA", font=("Arial", 12), anchor=tk.NE)
+slitscan_script_off_ddec_label = tk.Label(frame, text="OFF dDec", font=("Arial", 12), anchor=tk.NE)
+slitscan_script_targetshortname_entry = tk.Entry(frame, font=("Arial", 12), textvariable=target.scan_script_targetshortname)
+slitscan_script_off_dra_entry = tk.Entry(frame, font=("Arial", 12), textvariable=target.scan_script_off[0])
+slitscan_script_off_ddec_entry = tk.Entry(frame, font=("Arial", 12), textvariable=target.scan_script_off[1])
+slitscan_script_button = tk.Button(frame, text='Generate Slitscan Scripts', command=target.generate_slitscan_scripts)
+slitscan_script_targetshortname_label.place(relx=0.4, rely=0.35, relwidth=0.15)
+slitscan_script_off_dra_label.place(relx=0.4, rely=0.38, relwidth=0.15)
+slitscan_script_off_ddec_label.place(relx=0.4, rely=0.41, relwidth=0.15)
+slitscan_script_targetshortname_entry.place(relx=0.55, rely=0.347, relwidth=0.15)
+slitscan_script_off_dra_entry.place(relx=0.55, rely=0.377, relwidth=0.1)
+slitscan_script_off_ddec_entry.place(relx=0.55, rely=0.407, relwidth=0.1)
+slitscan_script_button.place(relx=0.47, rely=0.47, relwidth=0.225)
 
 #A, B, and G positions
 sl_label = tk.Label(frame, text='SL', font=("Arial", 12), anchor=tk.NE)
@@ -384,19 +735,23 @@ simbad_button.place(relx=0.88, rely=0.015)
 
 #make finder chart button
 make_finder_chart_button = tk.Button(frame, text='Make Finder Chart', command=make_finder_chart)
-make_finder_chart_button.place(relx=0.715, rely=0.18)
+make_finder_chart_button.place(relx=0.59, rely=0.12)
+update_finder_chart_button = tk.Button(frame, text='Update Finder Chart', command=remake_regions)
+update_finder_chart_button.place(relx=0.77, rely=0.12)
 survey_label = tk.Label(frame, text='Survey:', font=("Arial", 12), anchor=tk.NE)
 survey_menu = ttk.Combobox(frame, textvariable=target.survey, values=('2MASS K-band', 'POSS2 IR'), state='readonly')
-survey_label.place(relx=0.53, rely=0.23, relwidth=0.15)
-survey_menu.place(relx=0.73, rely=0.225, relwidth=0.16)
+survey_label.place(relx=0.53, rely=0.17, relwidth=0.13)
+survey_menu.place(relx=0.73, rely=0.165, relwidth=0.16)
 fov_label = tk.Label(frame, text='Image FOV (arcmin):', font=("Arial", 12), anchor=tk.NE)
 fov_entry = tk.Entry(frame, font=("Arial", 12), textvariable=target.fov)
-fov_label.place(relx=0.53, rely=0.265, relwidth=0.2)
-fov_entry.place(relx=0.73, rely=0.26, relwidth=0.16)
+fov_label.place(relx=0.53, rely=0.205, relwidth=0.2)
+fov_entry.place(relx=0.73, rely=0.20, relwidth=0.16)
 
 
 
 
+gidestar_header = tk.Label(frame, text='Guide Star', font=("Arial bold", 24), anchor=tk.N)
+gidestar_header.place(relx=0.0, rely=0.53, relwidth=1.0)
 
 #Search guide star button
 search_guide_star_button = tk.Button(frame, text='Search for Guide Stars', command=search_for_guide_stars)
