@@ -455,7 +455,62 @@ class Target:
 		parent_dir = askdirectory()
 		if parent_dir is None: #Error catch if no dir is found
 			return
-		for scan_block in self.scan_blocks:
+		off_lines = [] #Generate instrucitons to go to off which will form an independent script but also be appended to the end of a set of positions
+		off_lines.append('SetObjName '+self.scan_script_targetshortname.get()+'_OFF')
+		dra = float(self.scan_script_off[0].get()) #Moving telescope to off (requires <= 300 arcsec for some reason so we do it in increments if we move further)
+		ddec = float(self.scan_script_off[1].get())
+		while dra > 300.0:		
+			off_lines.append('MoveTelescope 300 0')
+			off_lines.append('WaitForSeconds 3')
+			dra = dra - 300.0
+		while dra < -300.0:		
+			off_lines.append('MoveTelescope -300 0')
+			off_lines.append('WaitForSeconds 3')
+			dra = dra + 300.0
+		while ddec > 300.0:		
+			off_lines.append('MoveTelescope 0 300')
+			off_lines.append('WaitForSeconds 3')
+			ddec = ddec - 300.0
+		while ddec < -300.0:		
+			off_lines.append('MoveTelescope 0 -300')
+			off_lines.append('WaitForSeconds 3')
+			ddec = ddec + 300.0				
+		off_lines.append('MoveTelescope '+str(dra)+' '+str(ddec))
+		off_lines.append('WaitForSeconds 3')
+		off_lines.append('StartGuideBox') #Start and stop guiding to take a single image
+		off_lines.append('WaitForSeconds 1')
+		off_lines.append('StopAG')
+		off_lines.append('StartExposure')
+		off_lines.append('WaitForExposureEnds')	
+		dra = -float(self.scan_script_off[0].get()) #Moving telescope back to on position (requires <= 300 arcsec for some reason so we do it in increments if we move further)
+		ddec = -float(self.scan_script_off[1].get())
+		while dra > 300.0:		
+			off_lines.append('MoveTelescope 300 0')
+			off_lines.append('WaitForSeconds 3')
+			dra = dra - 300.0
+		while dra < -300.0:		
+			off_lines.append('MoveTelescope -300 0')
+			off_lines.append('WaitForSeconds 3')
+			dra = dra + 300.0
+		while ddec > 300.0:		
+			off_lines.append('MoveTelescope 0 300')
+			off_lines.append('WaitForSeconds 3')
+			ddec = ddec - 300.0
+		while ddec < -300.0:		
+			off_lines.append('MoveTelescope 0 -300')
+			off_lines.append('WaitForSeconds 3')
+			ddec = ddec + 300.0	
+		off_lines.append('MoveTelescope '+str(dra)+' '+str(ddec))
+		off_lines.append('WaitForSeconds 3')
+		off_lines.append('StartGuideBox') #Start and stop guiding to take a single image
+		off_lines.append('WaitForSeconds 1')
+		off_lines.append('StopAG')
+		f = open(parent_dir+'/'+self.scan_script_targetshortname.get()+'_OFF.script', "w") #Save the OFF script
+		for line in off_lines:
+			f.write(f"{line}\n")
+		f.close()
+		scripts = [] #Store all scripts for later combining two block sets
+		for scan_block in self.scan_blocks: #Now generate scrips for each set of block positions 123321 and append an off at the end
 			lines = []
 			lines.append('SetObjType TAR')
 			sl = scan_block['sl']
@@ -499,59 +554,26 @@ class Target:
 				lines.append('StopAG')
 				lines.append('WaitForSeconds 3')
 				i = i+1
-			lines.append('SetObjName '+self.scan_script_targetshortname.get()+'_OFF')
-			dra = float(self.scan_script_off[0].get()) #Moving telescope to off (requires <= 300 arcsec for some reason so we do it in increments if we move further)
-			ddec = float(self.scan_script_off[1].get())
-			while dra > 300.0:		
-				lines.append('MoveTelescope 300 0')
-				lines.append('WaitForSeconds 3')
-				dra = dra - 300.0
-			while dra < -300.0:		
-				lines.append('MoveTelescope -300 0')
-				lines.append('WaitForSeconds 3')
-				dra = dra + 300.0
-			while ddec > 300.0:		
-				lines.append('MoveTelescope 300 0')
-				lines.append('WaitForSeconds 3')
-				ddec = ddec - 300.0
-			while ddec < -300.0:		
-				lines.append('MoveTelescope -300 0')
-				lines.append('WaitForSeconds 3')
-				ddec = ddec + 300.0				
-			lines.append('MoveTelescope '+str(dra)+' '+str(ddec))
-			lines.append('WaitForSeconds 3')
-			lines.append('StartGuideBox') #Start and stop guiding to take a single image
-			lines.append('WaitForSeconds 1')
-			lines.append('StopAG')
-			lines.append('StartExposure')
-			lines.append('WaitForExposureEnds')	
-			dra = -float(self.scan_script_off[0].get()) #Moving telescope back to on position (requires <= 300 arcsec for some reason so we do it in increments if we move further)
-			ddec = -float(self.scan_script_off[1].get())
-			while dra > 300.0:		
-				lines.append('MoveTelescope 300 0')
-				lines.append('WaitForSeconds 3')
-				dra = dra - 300.0
-			while dra < -300.0:		
-				lines.append('MoveTelescope -300 0')
-				lines.append('WaitForSeconds 3')
-				dra = dra + 300.0
-			while ddec > 300.0:		
-				lines.append('MoveTelescope 300 0')
-				lines.append('WaitForSeconds 3')
-				ddec = ddec - 300.0
-			while ddec < -300.0:		
-				lines.append('MoveTelescope -300 0')
-				lines.append('WaitForSeconds 3')
-				ddec = ddec + 300.0	
-			lines.append('MoveTelescope '+str(dra)+' '+str(ddec))
-			lines.append('WaitForSeconds 3')
-			lines.append('StartGuideBox') #Start and stop guiding to take a single image
-			lines.append('WaitForSeconds 1')
-			lines.append('StopAG')
-			f = open(parent_dir+'/'+label+'.script', "w")
+			lines.extend(off_lines) #Add going to the off to the end of the script
+			f = open(parent_dir+'/'+label+'.script', "w") #Save the block positions script
 			for line in lines:
 				f.write(f"{line}\n")
 			f.close()
+			scripts.append(lines)
+		for i in range(0, len(scripts), 2): #Now generate scripts that can run two sets of scan blocks, for convenience
+			lines = []
+			lines.extend(scripts[i])
+			lines.extend(scripts[i+1])
+			scan_block_1 = self.scan_blocks[i]
+			scan_block_2 = self.scan_blocks[i+1]
+			label = self.scan_script_targetshortname.get()+'_'+str(scan_block_1['row'])+'-'+str(scan_block_1['col'])+'-'+str(scan_block_1['pos'][0])+'_'+str(scan_block_2['row'])+'-'+str(scan_block_2['col'])+'-'+str(scan_block_2['pos'][0])
+			f = open(parent_dir+'/'+label+'.script', "w") #Save the block positions script
+			for line in lines:
+				f.write(f"{line}\n")
+			f.close()			
+
+
+
 
 
 target = Target()
