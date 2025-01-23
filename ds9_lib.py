@@ -127,14 +127,18 @@ def create_region(coordobj, rotation, plate_scale, guidestar_dra=0, guidestar_dd
     if show_scan:
         for block in scan_blocks:
             for i in range(len(block['sw'])):
-                if not scan_plus_90_deg:
-                    block_dra, block_ddec = convert_from_sl_sw_to_dra_ddec(block['sl']-guidestar_sl, block['sw'][i]-guidestar_sw, 90-rotation)
-                    #output.append('box('+str(coordobj.ra.deg()-((block_dra/3600.0)/coordobj.dec.cos()))+','+str(coordobj.dec.deg()-(block_ddec/3600.0))+','+slit_length+'",'+slit_width+'",' + slit_angle + ') # color=#C0C0C0 width=1 select=0')  #Display slit
-                else:
-                    block_dra, block_ddec = convert_from_sl_sw_to_dra_ddec(block['sl']-guidestar_sl, block['sw'][i]-guidestar_sw, (270-rotation))
-                output.append('box('+str(coordobj.ra.deg()-((block_dra/3600.0)/coordobj.dec.cos()))+','+str(coordobj.dec.deg()-(block_ddec/3600.0))+','+slit_length+'",'+slit_width+'",' + slit_angle + ') # color=#C0C0C0 width=1 select=0')  #Display slit
+                # # if not scan_plus_90_deg:
+                # #     block_dra, block_ddec = convert_from_sl_sw_to_dra_ddec(block['sl']-guidestar_sl, block['sw'][i]-guidestar_sw, 270+rotation)
+                # #     #output.append('box('+str(coordobj.ra.deg()-((block_dra/3600.0)/coordobj.dec.cos()))+','+str(coordobj.dec.deg()-(block_ddec/3600.0))+','+slit_length+'",'+slit_width+'",' + slit_angle + ') # color=#C0C0C0 width=1 select=0')  #Display slit
+                # # else:
+                # block_dra, block_ddec = convert_from_sl_sw_to_dra_ddec(block['sl']-guidestar_sl, block['sw'][i]-guidestar_sw, (90+rotation))
+                block_dra, block_ddec = convert_from_sl_sw_to_dra_ddec(block['sl'], block['sw'][i], (90+rotation))
+                block_dra = block_dra - guidestar_dra
+                block_ddec = block_ddec - guidestar_ddec
+                # output.append('box('+str(coordobj.ra.deg()-((block_dra/3600.0)/coordobj.dec.cos()))+','+str(coordobj.dec.deg()-(block_ddec/3600.0))+','+slit_length+'",'+slit_width+'",' + slit_angle + ') # color=#C0C0C0 width=1 select=0')  #Display slit
 
-                #block_dra, block_ddec = convert_from_sl_sw_to_dra_ddec(block['sl'], block['sw'][i], 90-rotation)
+                #block_dra, block_ddec = convert_from_sl_sw_to_dra_ddec(block['sl']-guidestar_sl, block['sw'][i]-guidestar_sw, 90+rotation)
+                output.append('box('+str(coordobj.ra.deg()-((block_dra/3600.0)/coordobj.dec.cos()))+','+str(coordobj.dec.deg()-(block_ddec/3600.0))+','+slit_length+'",'+slit_width+'",' + slit_angle + ') # color=#C0C0C0 width=1 select=0')  #Display slit
 
                 
 
@@ -147,8 +151,8 @@ def create_region(coordobj, rotation, plate_scale, guidestar_dra=0, guidestar_dd
     output.append('box('+str(coordobj.ra.deg())+','+str(coordobj.dec.deg())+','+slit_length+'",'+slit_width+'",' + slit_angle + ') # color=green width=2 select=0')  #Display slit
     
     if abs(guidestar_dra) > 0. or abs(guidestar_ddec) > 0.:  #show guidestar if it exists
-        output.append('point(' + str((guidestar_dra/coordobj.dec.cos())+coordobj.ra.deg()) + ',' + str(
-            guidestar_ddec+coordobj.dec.deg()) + ') # point=circle font="helvetica 12 bold roman" color=yellow text={Offslit guide star [sl: ' + "%5.2f" % guidestar_sl + ', sw:' + "%5.2f" % guidestar_sw + ']} select=0')
+        output.append('point(' + str((guidestar_dra/3600.0/coordobj.dec.cos())+coordobj.ra.deg()) + ',' + str(
+            guidestar_ddec/3600.0+coordobj.dec.deg()) + ') # point=circle font="helvetica 12 bold roman" color=yellow text={Offslit guide star [sl: ' + "%5.2f" % guidestar_sl + ', sw:' + "%5.2f" % guidestar_sw + ']} select=0')
     output.append('polygon' + poly_xy)  #Save SVC FOV polygon
     savetxt('IGRINS_svc_generated.reg', output, fmt="%s")  #Save region template file for reading into ds9
 
@@ -270,7 +274,7 @@ def make_finder_chart_in_ds9(target, guidestar, grab_image=True):
     # create_region(obj_coords, delta_PA, plate_scale, gstar_dra_deg, gstar_ddec_deg, gstar_sl,
     #                        gstar_sw, mirror_field)  #Make region template file rotated and the specified PA
     ds9.set('regions delete all')
-    create_region(obj_coords, delta_PA, plate_scale, guidestar_dra=guidestar_dra/3600.0, guidestar_ddec=guidestar_ddec/3600.0, guidestar_sl=guidestar_sl, guidestar_sw=guidestar_sw, mirror_field=mirror_field, 
+    create_region(obj_coords, delta_PA, plate_scale, guidestar_dra=guidestar_dra, guidestar_ddec=guidestar_ddec, guidestar_sl=guidestar_sl, guidestar_sw=guidestar_sw, mirror_field=mirror_field, 
         show_scan=target.use_slitscan.get(), scan_blocks=target.scan_blocks, scan_plus_90_deg=target.scan_rotation.get()=='+90 deg PA')  #Make region template file rotated and the specified PA
     #ds9.set(
     #    'regions template IGRINS_svc_generated.tpl at ' + obj_coords.showcoords() + ' fk5')  #Read in regions template file
@@ -376,6 +380,7 @@ def search_for_guide_stars(target_ra, target_dec, n_gstars, PA, survey, use_prop
             + r"&&$DEJ2000>=" + str(obj_coords.dec.deg() - gstar_dec_limit) + r"&&$DEJ2000<=" + str(
         obj_coords.dec.deg() + gstar_dec_limit) \
             + r"&&$Kmag<=" + str(gstar_mag_limit))  #Load catalog
+
 
     if survey == 'Gaia DR2':
         ds9.set('catalog match error 5 arcsec')

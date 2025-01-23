@@ -328,30 +328,39 @@ class Target:
 			for j in range(n_sets):
 				row_center = rows_start - rows[i]*drow
 				col_center = cols_start + cols[i]*dcol
-				sl = dg_sl + row_center
-				sw = dg_sw + col_center + steps_centers[j]
+				sw = dg_sw + row_center + steps_centers[j]
+				sl = dg_sl + col_center
 				block1 = {"row":rows[i], "col":cols[i], "pos":steps[j], "sl":sl, "sw":sw}
 				blocks.append(block1)
 				if n_blocks > 1: #Error catch for when their is only one black
 					row_center = rows_start - rows[i+1]*drow
 					col_center = cols_start + cols[i+1]*dcol
-					sl = dg_sl + row_center
-					sw = dg_sw + col_center + steps_centers[j]
+					sw = dg_sw + row_center + steps_centers[j]
+					sl = dg_sl + col_center
 					block2 = {"row":rows[i+1], "col":cols[i+1],"pos":steps[j], "sl":sl, "sw":sw}
 					blocks.append(block2)
 					if i+2 == n_blocks-1: #Handle an odd number of blocks to nod between by mixing 3 instead of 2 blocks
 						row_center = rows_start - rows[i+2]*drow
 						col_center = cols_start + cols[i+2]*dcol
-						sl = dg_sl + row_center
-						sw = dg_sw + col_center + steps_centers[j]
+						sw = dg_sw + row_center + steps_centers[j]
+						sl = dg_sl + col_center
 						block3 = {"row":rows[i+2], "col":cols[i+2], "pos":steps[j], "sl":sl, "sw":sw}
 						blocks.append(block3)
 			if i+2 == n_blocks-1: #Handle an odd number of blocks to nod between by mixing 3 instead of 2 blocks
 				break #and end the loop
+		for block in blocks:
+			block['row'] = nrows - block['row'] - 1
+			block['col'] = ncols - block['col'] - 1
 		if self.scan_rotation.get() == '+90 deg PA': #If perpendicular scan with PA at +90 deg compared to default (e.g. PA 90 is default so this would be PA of 180 deg)
-			print('ITS WORKING ITS WORKING')
 			for block in blocks:
-				block['row'] = nrows - block['row'] - 1
+				#block['row'] = nrows - block['row'] - 1
+				block['col'] = ncols - block['col'] - 1
+				swap_row = block['row']
+				swap_col = block['col']
+				block['row'] = swap_col
+				block['col'] = swap_row
+				# for position in block['pos']:
+				# 	position = 14 - position
 		# elif self.scan_rotation.get() == '-90 deg PA':
 		# 	for block in blocks:
 		# 		block['row'] = nrows - block['row'] - 1
@@ -454,7 +463,9 @@ class Target:
 			lines.append('SetAGPos %0.2f'%sl +' %0.2f'%sw)
 			label = self.scan_script_targetshortname.get()+'_'+str(scan_block['row'])+'-'+str(scan_block['col'])+'-'+str(scan_block['pos'][0])
 			lines.append('SetObjName '+label)
-			lines.append('WaitForYes “To start script for '+str(scan_block['row'])+'-'+str(scan_block['col'])+' starting pos '+str(scan_block['pos'][0])+'. Put guide star at autoguide position then click Yes.”')
+			text_to_say = 'To start the script for '+str(scan_block['row'])+'-'+str(scan_block['col'])+'-'+str(scan_block['pos'][0])+' (row-col-position), center the guide star on the autoguide position then click OK.'
+			text_to_say = text_to_say.replace(' ', r'\ ') #Note needed to replace spaces with \[space] for script to use full sentence
+			lines.append('WaitForYes '+text_to_say) 
 			lines.append('StartGuideBox')
 			lines.append('WaitForSeconds 15')
 			lines.append('StartExposure')
@@ -473,7 +484,7 @@ class Target:
 				lines.append('SetObjName '+self.scan_script_targetshortname.get()+'_'+str(scan_block['row'])+'-'+str(scan_block['col'])+'-'+str(scan_block['pos'][i]))
 				lines.append('SetAGPos %0.2f'%sl +' %0.2f'%sw)
 				lines.append('MoveTelescope %0.2f'%-dra +' %0.2f'%-ddec)
-				lines.append('WaitForSeconds 1')
+				lines.append('WaitForSeconds 3')
 				lines.append('StartGuideBox')
 				lines.append('StartExposure')
 				lines.append('WaitForExposureEnds')
@@ -486,10 +497,54 @@ class Target:
 				lines.append('WaitForSeconds 3')
 				i = i+1
 			lines.append('SetObjName '+self.scan_script_targetshortname.get()+'_OFF')
-			lines.append('MoveTelescope '+self.scan_script_off[0].get()+' '+self.scan_script_off[1].get())
+			dra = float(self.scan_script_off[0].get()) #Moving telescope to off (requires <= 300 arcsec for some reason so we do it in increments if we move further)
+			ddec = float(self.scan_script_off[1].get())
+			while dra > 300.0:		
+				lines.append('MoveTelescope 300 0')
+				lines.append('WaitForSeconds 3')
+				dra = dra - 300.0
+			while dra < -300.0:		
+				lines.append('MoveTelescope -300 0')
+				lines.append('WaitForSeconds 3')
+				dra = dra + 300.0
+			while ddec > 300.0:		
+				lines.append('MoveTelescope 300 0')
+				lines.append('WaitForSeconds 3')
+				ddec = ddec - 300.0
+			while ddec < -300.0:		
+				lines.append('MoveTelescope -300 0')
+				lines.append('WaitForSeconds 3')
+				ddec = ddec + 300.0				
+			lines.append('MoveTelescope '+str(dra)+' '+str(ddec))
+			lines.append('WaitForSeconds 3')
+			lines.append('StartGuideBox') #Start and stop guiding to take a single image
 			lines.append('WaitForSeconds 1')
+			lines.append('StopAG')
 			lines.append('StartExposure')
-			lines.append('WaitForExposureEnds')		
+			lines.append('WaitForExposureEnds')	
+			dra = -float(self.scan_script_off[0].get()) #Moving telescope back to on position (requires <= 300 arcsec for some reason so we do it in increments if we move further)
+			ddec = -float(self.scan_script_off[1].get())
+			while dra > 300.0:		
+				lines.append('MoveTelescope 300 0')
+				lines.append('WaitForSeconds 3')
+				dra = dra - 300.0
+			while dra < -300.0:		
+				lines.append('MoveTelescope -300 0')
+				lines.append('WaitForSeconds 3')
+				dra = dra + 300.0
+			while ddec > 300.0:		
+				lines.append('MoveTelescope 300 0')
+				lines.append('WaitForSeconds 3')
+				ddec = ddec - 300.0
+			while ddec < -300.0:		
+				lines.append('MoveTelescope -300 0')
+				lines.append('WaitForSeconds 3')
+				ddec = ddec + 300.0	
+			lines.append('MoveTelescope '+str(dra)+' '+str(ddec))
+			lines.append('WaitForSeconds 3')
+			lines.append('StartGuideBox') #Start and stop guiding to take a single image
+			lines.append('WaitForSeconds 1')
+			lines.append('StopAG')
 			f = open(parent_dir+'/'+label+'.script', "w")
 			for line in lines:
 				f.write(f"{line}\n")
