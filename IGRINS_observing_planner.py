@@ -483,7 +483,10 @@ class Target:
 				previous_sw = sw
 				lines.append('SetObjName '+self.scan_script_targetshortname.get()+'_'+str(scan_block['row'])+'-'+str(scan_block['col'])+'-'+str(scan_block['pos'][i]))
 				lines.append('SetAGPos %0.2f'%sl +' %0.2f'%sw)
-				lines.append('MoveTelescope %0.2f'%-dra +' %0.2f'%-ddec)
+				if not target.scan_rotation.get()=='+90 deg PA':
+					lines.append('MoveTelescope %0.2f'%-dra +' %0.2f'%-ddec)
+				else:
+					lines.append('MoveTelescope %0.2f'%dra +' %0.2f'%ddec)
 				lines.append('WaitForSeconds 3')
 				lines.append('StartGuideBox')
 				lines.append('StartExposure')
