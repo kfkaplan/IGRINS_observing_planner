@@ -152,7 +152,7 @@ def create_region(coordobj, rotation, plate_scale, guidestar_dra=0, guidestar_dd
     
     if abs(guidestar_dra) > 0. or abs(guidestar_ddec) > 0.:  #show guidestar if it exists
         output.append('point(' + str((guidestar_dra/3600.0/coordobj.dec.cos())+coordobj.ra.deg()) + ',' + str(
-            guidestar_ddec/3600.0+coordobj.dec.deg()) + ') # point=circle font="helvetica 12 bold roman" color=yellow text={Offslit guide star [sl: ' + "%5.2f" % guidestar_sl + ', sw:' + "%5.2f" % guidestar_sw + ']} select=0')
+            guidestar_ddec/3600.0+coordobj.dec.deg()) + ') # point=circle font="helvetica 12 bold roman" color=yellow text={Offslit guide star [sl: ' + "%5.2f" % guidestar_sl + ', sw:' + "%5.2f" % guidestar_sw + ']} select=1')
     output.append('polygon' + poly_xy)  #Save SVC FOV polygon
     savetxt('IGRINS_svc_generated.reg', output, fmt="%s")  #Save region template file for reading into ds9
 
@@ -166,8 +166,8 @@ def make_finder_chart_in_ds9(target, guidestar, grab_image=True):
     ra = sex2deg(target.ra.get(), units='hms') #Convert to decimal degrees so we can easily add and subtract
     dec = sex2deg(target.dec.get(), units='dms')
     if target.use_proper_motion.get(): #Use target proper motion to set slit center 
-        proper_motion_ra_distance_arcsec = float(target.pmra.get()) * 1e-3 * (float(target.epoch.get())-2000.0)
-        proper_motion_dec_distance_arcsec = float(target.pmdec.get()) * 1e-3 * (float(target.epoch.get())-2000.0)
+        proper_motion_ra_distance_arcsec = float(target.proper_motion[0].get()) * 1e-3 * (float(target.epoch.get())-2000.0)
+        proper_motion_dec_distance_arcsec = float(target.proper_motion[1].get()) * 1e-3 * (float(target.epoch.get())-2000.0)
         ra += proper_motion_ra_distance_arcsec / cos(radians(dec)) / 3600.0
         dec += proper_motion_dec_distance_arcsec / 3600.
     guidestar_dra = float(guidestar.dra.get()) #Defaults for guidestar
