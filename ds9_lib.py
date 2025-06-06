@@ -385,7 +385,8 @@ def search_for_guide_stars(target_ra, target_dec, n_gstars, PA, survey, use_prop
     if survey == 'Gaia DR2':
         ds9.set('catalog match error 5 arcsec')
         ds9.set('catalog match')
-    ds9.set("catalog sort '2_Kmag' incr")  #Sort list by starting from brightest K-band mag. and getting dimmer as you go down
+    #ds9.set("catalog sort '2_Kmag' incr")  #Sort list by starting from brightest K-band mag. and getting dimmer as you go down
+    ds9.set("catalog sort 'Kmag' incr")  #Sort list by starting from brightest K-band mag. and getting dimmer as you go down
     ds9.set("catalog export tsv " + current_working_directory + "tmp.dat")  #Save catalog list as a tab seperated value file for later trimming
     lines = open('tmp.dat').readlines()  #Open catalog list tsv file into memory
     #breakpoint()
