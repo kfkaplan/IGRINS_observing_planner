@@ -175,6 +175,7 @@ def make_finder_chart_in_ds9(target, guidestar, grab_image=True):
     guidestar_sl =  float(guidestar.dG[0].get())
     guidestar_sw =  float(guidestar.dG[1].get())
     if target.use_slitscan.get(): #Adjust coordinates if using slitscan
+        # breakpoint()
         guidestar_sl, guidestar_sw = target.get_scan_sl_sw(int(target.scan_finder_row.get()), 
                                         int(target.scan_finder_col.get()),
                                         int(target.scan_finder_pos.get()))
@@ -188,8 +189,8 @@ def make_finder_chart_in_ds9(target, guidestar, grab_image=True):
             ra += (guidestar_dra+guidestar_slitscan_dra) / cos(radians(dec)) / 3600.0
             dec += (guidestar_ddec+guidestar_slitscan_ddec) / 3600.       
             guidestar_dra =  -guidestar_slitscan_dra
-            guidestar_ddec = -guidestar_slitscan_ddec       
-
+            guidestar_ddec = -guidestar_slitscan_ddec
+            
     obj_coords = coords(ra, dec)
     print(ra, dec)
     # else:

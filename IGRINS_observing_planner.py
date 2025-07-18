@@ -348,9 +348,14 @@ class Target:
 						blocks.append(block3)
 			if i+2 == n_blocks-1: #Handle an odd number of blocks to nod between by mixing 3 instead of 2 blocks
 				break #and end the loop
-		for block in blocks:
-			block['row'] = nrows - block['row'] - 1
-			block['col'] = ncols - block['col'] - 1
+		if n_blocks == 1: #Error catch for maps with only 1 block
+			for block in blocks:
+				block['row'] = 0
+				block['col'] = 0
+		else:
+			for block in blocks:
+				block['row'] = nrows - block['row'] - 1
+				block['col'] = ncols - block['col'] - 1
 		if self.scan_rotation.get() == '+90 deg PA': #If perpendicular scan with PA at +90 deg compared to default (e.g. PA 90 is default so this would be PA of 180 deg)
 			for block in blocks:
 				#block['row'] = nrows - block['row'] - 1
@@ -399,7 +404,10 @@ class Target:
 			line += ', ' #Date of night, leave blank
 			line += ', ' #Exp time., leave blank
 			line += str(self.scan_blocks[i]['row'])+'-'+str(self.scan_blocks[i]['col'])+', ' #Block 1
-			line += str(self.scan_blocks[i+1]['row'])+'-'+str(self.scan_blocks[i+1]['col'])+', ' #Block 2
+			if i+1 < len(self.scan_blocks): #Catch if last "chunk" then just leave blanks
+				line += str(self.scan_blocks[i+1]['row'])+'-'+str(self.scan_blocks[i+1]['col'])+', ' #Block 2
+			else:
+				line += ', '
 			for j in range(n_positions):
 				line += str(self.scan_blocks[i]['pos'][j])+', ' #Position J (usually 1 2 3 for example)
 			line += ', , ' #OFF
@@ -437,6 +445,9 @@ class Target:
 		# 			step_center = steps_start + k*dstep
 		# 			print(row_center, col_center, step_center)
 	def get_scan_sl_sw(self, row=0, col=0, pos=0): #Return guidestar sl and sw for a given row, column, and position in a slitscan
+		# breakpoint()
+		# if target.scan_Nrow.get() == '1': #Error catch for when only one row is used
+		# 	row=-1
 		blocks_with_match_rows = [element for element in self.scan_blocks if element['row'] == row]
 		blocks_with_matched_row_and_col = [element for element in blocks_with_match_rows if element['col'] == col]
 		for block in blocks_with_matched_row_and_col:
@@ -561,16 +572,17 @@ class Target:
 			f.close()
 			scripts.append(lines)
 		for i in range(0, len(scripts), 2): #Now generate scripts that can run two sets of scan blocks, for convenience
-			lines = []
-			lines.extend(scripts[i])
-			lines.extend(scripts[i+1])
-			scan_block_1 = self.scan_blocks[i]
-			scan_block_2 = self.scan_blocks[i+1]
-			label = self.scan_script_targetshortname.get()+'_'+str(scan_block_1['row'])+'-'+str(scan_block_1['col'])+'-'+str(scan_block_1['pos'][0])+'_'+str(scan_block_2['row'])+'-'+str(scan_block_2['col'])+'-'+str(scan_block_2['pos'][0])
-			f = open(parent_dir+'/'+label+'.script', "w") #Save the block positions script
-			for line in lines:
-				f.write(f"{line}\n")
-			f.close()			
+			if i+1 < len(scripts): #error catch to only make double scripts for even numbers of scripts
+				lines = []
+				lines.extend(scripts[i])
+				lines.extend(scripts[i+1])
+				scan_block_1 = self.scan_blocks[i]
+				scan_block_2 = self.scan_blocks[i+1]
+				label = self.scan_script_targetshortname.get()+'_'+str(scan_block_1['row'])+'-'+str(scan_block_1['col'])+'-'+str(scan_block_1['pos'][0])+'_'+str(scan_block_2['row'])+'-'+str(scan_block_2['col'])+'-'+str(scan_block_2['pos'][0])
+				f = open(parent_dir+'/'+label+'.script', "w") #Save the block positions script
+				for line in lines:
+					f.write(f"{line}\n")
+				f.close()			
 
 
 
