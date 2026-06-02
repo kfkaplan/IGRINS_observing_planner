@@ -11,7 +11,7 @@ from coordfuncs import *
 #Add thing to grab from simbad
 Simbad.add_votable_fields('pmra', 'pmdec')
 
-rotator_zero_point = 193.0       #Instrument rotator zero point (Default East-West setting has PA = 90 deg.)
+rotator_zero_point = 493.0       #Instrument rotator zero point (Default East-West setting has PA = 90 deg.)
 
 #Set up window for GUI
 window = tk.Tk()
