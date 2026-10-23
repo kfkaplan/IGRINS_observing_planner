@@ -364,11 +364,11 @@ def search_for_guide_stars(target_ra, target_dec, n_gstars, PA, survey, use_prop
     gstar_ra_limit = gstar_ra_limit_arcmin / (2.0 * 60.0 * obj_coords.dec.cos())  #Convert limit in RA to degrees
     if survey == 'Gaia DR2':
         ds9.set('catalog gaia')
-        ds9.set(r"catalog filter $_RAJ2000>=" + str(obj_coords.ra.deg() - gstar_ra_limit) + r"&&$_RAJ2000<=" + str(
+        ds9.set(r"catalog filter '$_RAJ2000>=" + str(obj_coords.ra.deg() - gstar_ra_limit) + r"&&$_RAJ2000<=" + str(
             obj_coords.ra.deg() + gstar_ra_limit) \
                 + r"&&$_DEJ2000>=" + str(obj_coords.dec.deg() - gstar_dec_limit) + r"&&$_DEJ2000<=" + str(
             obj_coords.dec.deg() + gstar_dec_limit) \
-                + r"&&$RPmag<=" + str(gstar_mag_limit+3.0) + r"&&$RPmag>0.01")  #Load catalog
+                + r"&&$RPmag<=" + str(gstar_mag_limit+3.0) + r"&&$RPmag>0.01'")  #Load catalog
     #    elif survey == '2MASS point source':
     ds9.set('catalog 2mass')  #Initialize catalog
     # ds9.set("catalog filter '$RAJ2000>=" + str(obj_coords.ra.deg() - gstar_ra_limit) + "&&$RAJ2000<=" + str(
@@ -376,18 +376,16 @@ def search_for_guide_stars(target_ra, target_dec, n_gstars, PA, survey, use_prop
     #         + "&&$DEJ2000>=" + str(obj_coords.dec.deg() - gstar_dec_limit) + "&&$DEJ2000<=" + str(
     #     obj_coords.dec.deg() + gstar_dec_limit) \
     #         + "&&$Kmag<=" + str(gstar_mag_limit) + "'")  #Load catalog
-    ds9.set(r"catalog filter $RAJ2000>=" + str(obj_coords.ra.deg() - gstar_ra_limit) + r"&&$RAJ2000<=" + str(
+    ds9.set(r"catalog filter '$RAJ2000>=" + str(obj_coords.ra.deg() - gstar_ra_limit) + r"&&$RAJ2000<=" + str(
         obj_coords.ra.deg() + gstar_ra_limit) \
             + r"&&$DEJ2000>=" + str(obj_coords.dec.deg() - gstar_dec_limit) + r"&&$DEJ2000<=" + str(
         obj_coords.dec.deg() + gstar_dec_limit) \
-            + r"&&$Kmag<=" + str(gstar_mag_limit))  #Load catalog
-
-
+            + r"&&$Kmag<=" + str(gstar_mag_limit)+"'")  #Load catalog
     if survey == 'Gaia DR2':
         ds9.set('catalog match error 5 arcsec')
         ds9.set('catalog match')
-    #ds9.set("catalog sort '2_Kmag' incr")  #Sort list by starting from brightest K-band mag. and getting dimmer as you go down
-    ds9.set("catalog sort 'Kmag' incr")  #Sort list by starting from brightest K-band mag. and getting dimmer as you go down
+    ds9.set("catalog sort '2_Kmag' incr")  #Sort list by starting from brightest K-band mag. and getting dimmer as you go down
+    #ds9.set("catalog sort 'Kmag' incr")  #Sort list by starting from brightest K-band mag. and getting dimmer as you go down
     ds9.set("catalog export tsv " + current_working_directory + "tmp.dat")  #Save catalog list as a tab seperated value file for later trimming
     lines = open('tmp.dat').readlines()  #Open catalog list tsv file into memory
     #breakpoint()
