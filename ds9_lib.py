@@ -362,8 +362,8 @@ def search_for_guide_stars(target_ra, target_dec, n_gstars, PA, survey, use_prop
     obj_coords = coord_query(target_ra+' '+target_dec) #Put RA and DEC in a coords object
     gstar_dec_limit = gstar_dec_limit_arcmin / (2.0 * 60.0)  #Convert limit in Dec. to degrees
     gstar_ra_limit = gstar_ra_limit_arcmin / (2.0 * 60.0 * obj_coords.dec.cos())  #Convert limit in RA to degrees
-    if survey == 'Gaia DR2':
-        ds9.set('catalog gaia')
+    if survey == 'Gaia DR3':
+        ds9.set('catalog gaia3')
         ds9.set(r"catalog filter '$_RAJ2000>=" + str(obj_coords.ra.deg() - gstar_ra_limit) + r"&&$_RAJ2000<=" + str(
             obj_coords.ra.deg() + gstar_ra_limit) \
                 + r"&&$_DEJ2000>=" + str(obj_coords.dec.deg() - gstar_dec_limit) + r"&&$_DEJ2000<=" + str(
@@ -381,7 +381,7 @@ def search_for_guide_stars(target_ra, target_dec, n_gstars, PA, survey, use_prop
             + r"&&$DEJ2000>=" + str(obj_coords.dec.deg() - gstar_dec_limit) + r"&&$DEJ2000<=" + str(
         obj_coords.dec.deg() + gstar_dec_limit) \
             + r"&&$Kmag<=" + str(gstar_mag_limit)+"'")  #Load catalog
-    if survey == 'Gaia DR2':
+    if survey == 'Gaia DR3':
         ds9.set('catalog match error 5 arcsec')
         ds9.set('catalog match')
         ds9.set("catalog sort '2_Kmag' incr")  #Sort list by starting from brightest K-band mag. and getting dimmer as you go down
@@ -395,7 +395,7 @@ def search_for_guide_stars(target_ra, target_dec, n_gstars, PA, survey, use_prop
             lines[0:n_gstars + 1])  #Truncate by maximum number of guide stars and save catalog list
         ds9.set('catalog clear')  #Clear 2MASS catalo, note run 3 times to close all the catalog windows
         ds9.set('catalog close')  #Close 2MASS catalog window
-        if survey == 'Gaia DR2': #If using Gaia
+        if survey == 'Gaia DR3': #If using Gaia
             ds9.set('catalog clear')  #Clear 2MASS catalog
             ds9.set('catalog close')  #Close 2MASS catalog window
             ds9.set('catalog clear')  #Clear 2MASS catalog
@@ -420,7 +420,7 @@ def search_for_guide_stars(target_ra, target_dec, n_gstars, PA, survey, use_prop
                                                    units='arcsec')  #position of guide star from object in arcseconds
             found_gstar_ddec_arcsec = dec_seperation(obj_coords, gstar_coords,
                                                      units='arcsec')  #position of guide star from object in arcseconds
-            if use_proper_motion == True and survey == 'Gaia DR2': #If using the Gaia catalog and user specifies they want to use proper motion, apply proper motion here
+            if use_proper_motion == True and survey == 'Gaia DR3': #If using the Gaia catalog and user specifies they want to use proper motion, apply proper motion here
                 proper_motion_ra_distance_arcsec = gpra[i] * 1e-3 * (epoch-2000.0)
                 proper_motion_dec_distance_arcsec = gpdec[i] * 1e-3 * (epoch-2000.0)
                 found_gstar_dra_arcsec += proper_motion_ra_distance_arcsec

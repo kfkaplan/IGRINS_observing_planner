@@ -590,7 +590,7 @@ class Target:
 
 target = Target()
 guidestars = [Target(), Target(), Target(), Target(), Target(), Target(), Target(), Target(), Target(), Target()]
-guidestars[gs_index].survey.set('Gaia DR2') #Set guidetar survey default
+guidestars[gs_index].survey.set('Gaia DR3') #Set guidetar survey default
 
 
 
@@ -859,7 +859,7 @@ n_guide_stars_label.place(relx=0.61, rely=0.642, relwidth=0.08)
 n_guide_stars_entry.place(relx=0.7, rely=0.642, relwidth=0.08)
 
 guide_star_survey_label = tk.Label(frame, text='Survey:', font=("Arial", 12), anchor=tk.NE)
-guide_star_survey_menu = ttk.Combobox(frame, textvariable=guidestars[gs_index].survey, values=('Gaia DR2', '2MASS point source'), state='readonly')
+guide_star_survey_menu = ttk.Combobox(frame, textvariable=guidestars[gs_index].survey, values=('Gaia DR3', '2MASS point source'), state='readonly')
 guide_star_survey_label.place(relx=0.54, rely=0.68, relwidth=0.15)
 guide_star_survey_menu.place(relx=0.7, rely=0.677, relwidth=0.19)
 guide_starpm_checkbox = tk.Checkbutton(frame, text="Use proper motion?", variable=guidestars[gs_index].use_proper_motion)
