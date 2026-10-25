@@ -400,7 +400,7 @@ def search_for_guide_stars(target_ra, target_dec, n_gstars, PA, survey, use_prop
             ds9.set('catalog close')  #Close 2MASS catalog window
             ds9.set('catalog clear')  #Clear 2MASS catalog
             ds9.set('catalog close')  #Close 2MASS catalog window
-            gra, gdec, gmag, gpra, gpdec = genfromtxt('tmp.dat', usecols=(0, 1, 43, 9, 11), delimiter='\t', unpack=True,
+            gra, gdec, gmag, gpra, gpdec = genfromtxt('tmp.dat', usecols=(0, 1, 50, 9, 11), delimiter='\t', unpack=True,
                                      skip_header=1, missing_values='', filling_values=0)  #Grab RA, Dec., K-mag and proper motion from catalog
             gpra = ascontiguousarray(gpra)
             gpdec = ascontiguousarray(gpdec)
