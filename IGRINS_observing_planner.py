@@ -8,8 +8,20 @@ from astroquery.simbad import Simbad
 import ds9_lib
 from coordfuncs import *
 
-#Add thing to grab from simbad
-Simbad.add_votable_fields('pmra', 'pmdec')
+#Check Simbad server in France is up, if not fallback to Harvard Simbad mirror, else throw an error
+try:
+	urllib.request.urlopen('https://simbad.cds.unistra.fr', timout=10)
+	Simbad.add_votable_fields('pmra', 'pmdec')
+except:
+	print('Unable to connect to simbad.cds.unistra.fr.  Trying mirror simbad.cfa.harvard.edu')
+	try:
+		urllib.request.urlopen('https://simbad.cfa.harvard.edu')
+		print('Found simbad.cfa.harvard.edu')
+		Simbad.server = 'simbad.harvard.edu' #Update simbad server
+		Simbad.add_votable_fields('pmra', 'pmdec')
+	except:
+		print('WARNING: Unable to connect to SIMBAD server.  Check your network connection and then check if SIMBAD is down.  This will cause issues when doing lookups.')
+
 
 rotator_zero_point = 493.0       #Instrument rotator zero point (Default East-West setting has PA = 90 deg.)
 
